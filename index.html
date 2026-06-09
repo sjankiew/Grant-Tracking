@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ระบบติดตามสถานะทุนวิจัย</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Noto+Serif+Thai:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ivory:#FAF7F0; --paper:#FFFFFF; --ink:#1F2933; --muted:#6B7280;
+    --line:#E3DCCB; --oxblood:#7B2D2D; --blue:#2B5F8A; --amber:#C98A12;
+    --green:#2E7D5B; --red:#C0392B; --grey:#6B7280; --violet:#5B4B8A;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:"IBM Plex Sans Thai",sans-serif;background:var(--ivory);color:var(--ink);font-size:14px;}
+  h1,h2,h3{font-family:"Noto Serif Thai",serif;margin:0;}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:8px;}
+  .btn{background:var(--blue);color:#fff;padding:9px 16px;font-weight:600;}
+  .btn:hover{filter:brightness(.95);}
+  .btn.ghost{background:transparent;color:var(--blue);border:1px solid var(--line);}
+  .btn.danger{background:var(--red);}
+  .btn.amber{background:var(--amber);}
+  .btn.green{background:var(--green);}
+  input,select{font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;width:100%;background:#fff;}
+  label{font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px;}
+  .hidden{display:none!important;}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px;}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;color:#fff;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid var(--line);}
+
+  /* ---- Login ---- */
+  #login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+  #login .box{width:380px;max-width:100%;}
+  #login h1{color:var(--oxblood);font-size:22px;margin-bottom:4px;}
+  .quick{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+  .quick button{background:var(--ivory);border:1px solid var(--line);color:var(--ink);padding:8px;font-size:12px;font-weight:600;}
+
+  /* ---- App shell ---- */
+  #app{display:grid;grid-template-columns:230px 1fr;min-height:100vh;}
+  #side{background:#22303C;color:#D7DEE4;padding:18px 12px;display:flex;flex-direction:column;}
+  #side h2{color:#fff;font-size:16px;padding:0 8px 14px;}
+  #side .nav{padding:10px 12px;border-radius:8px;color:#C3CCD4;font-weight:600;display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;}
+  #side .nav:hover{background:#2C3D4B;}
+  #side .nav.active{background:var(--blue);color:#fff;}
+  #side .nav .n{background:var(--amber);color:#000;border-radius:999px;font-size:11px;padding:0 7px;}
+  #side .who{margin-top:auto;font-size:12px;color:#9AA7B1;padding:10px 8px;border-top:1px solid #33424F;}
+  #main{padding:22px 26px;overflow:auto;}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+  .grid{display:grid;gap:14px;}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));}
+  .kpi .v{font-size:24px;font-weight:700;font-family:"Noto Serif Thai",serif;}
+  .kpi .l{font-size:12px;color:var(--muted);}
+  table{width:100%;border-collapse:collapse;background:#fff;}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;}
+  th{color:var(--muted);font-size:12px;text-transform:none;}
+  tr.click:hover{background:var(--ivory);cursor:pointer;}
+  .bar{height:8px;background:var(--line);border-radius:999px;overflow:hidden;}
+  .bar>i{display:block;height:100%;background:var(--blue);}
+
+  /* ---- Drawer ---- */
+  #scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);}
+  #drawer{position:fixed;top:0;right:0;height:100vh;width:520px;max-width:92vw;background:#fff;box-shadow:-8px 0 24px rgba(0,0,0,.15);overflow:auto;padding:22px;}
+  .sect{margin-top:18px;}
+  .sect h3{font-size:14px;color:var(--oxblood);margin-bottom:8px;border-bottom:1px solid var(--line);padding-bottom:6px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .muted{color:var(--muted);}
+  .err{color:var(--red);font-size:12px;margin-top:6px;}
+  .note{background:#FFF6E8;border:1px solid #F0DCB0;color:#7a5b12;padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:14px;}
+  a{color:var(--blue);}
+</style>
+</head>
+<body>
+
+<!-- =================== LOGIN =================== -->
+<div id="login">
+  <div class="box card">
+    <h1>ระบบติดตามสถานะทุนวิจัย</h1>
+    <p class="muted" style="margin-top:0">สำนักงานบริหารงานวิจัย</p>
+    <div id="apiwarn" class="note hidden"></div>
+    <div style="margin-bottom:10px"><label>ชื่อผู้ใช้</label><input id="uid" value=""/></div>
+    <div style="margin-bottom:12px"><label>รหัสผ่าน</label><input id="pwd" type="password" value=""/></div>
+    <button class="btn" style="width:100%" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div id="loginerr" class="err"></div>
+    <div class="quick">
+      <button onclick="quick('admin')">admin</button>
+      <button onclick="quick('staff')">staff</button>
+      <button onclick="quick('dean')">dean</button>
+      <button onclick="quick('reviewer')">reviewer</button>
+    </div>
+    <p class="muted" style="font-size:11px;margin-bottom:0">บัญชีทดสอบ รหัสผ่าน <b>1234</b> ทุกบัญชี</p>
+  </div>
+</div>
+
+<!-- =================== APP =================== -->
+<div id="app" class="hidden">
+  <aside id="side">
+    <h2>ทุนวิจัย</h2>
+    <div id="nav"></div>
+    <div class="who"><div id="whoName"></div><div id="whoRole" class="muted"></div>
+      <button class="btn ghost" style="margin-top:8px;width:100%;color:#D7DEE4;border-color:#3a4a57" onclick="logout()">ออกจากระบบ</button>
+    </div>
+  </aside>
+  <main id="main">
+    <div class="topbar"><h1 id="pageTitle" style="font-size:20px"></h1><div id="pageActions"></div></div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<!-- =================== DRAWER =================== -->
+<div id="scrim" class="hidden" onclick="closeDrawer()"></div>
+<div id="drawer" class="hidden"></div>
+
+<script>
+/* ============================================================
+   ใส่ URL ของ GAS Web App (ลงท้าย /exec) ที่ได้จากการ Deploy
+   ============================================================ */
+const API_URL = "https://script.google.com/macros/s/AKfycbxW2HESXQGHsqEA4CdVXm-w6kye1d1RrvwEWsVYysY7TwB4iE2Mgqve_1KXj2GQF6VX/exec";
+
+let STATE = { user:null, token:null, projects:[], budget:[], due:[], users:[], page:"dash" };
+
+const fmtBaht = n => Number(n||0).toLocaleString("th-TH",{maximumFractionDigits:0});
+const fmtDate = s => s ? new Date(s).toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"numeric"}) : "—";
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+const STATUS_COLOR = {
+  "ทำสัญญาแล้ว":"var(--blue)","รายงานความก้าวหน้าครั้งที่ 1":"var(--blue)",
+  "ส่งเล่มสมบูรณ์":"var(--violet)","รอการประเมิน":"var(--amber)","ปิดโครงการ":"var(--green)",
+  "ยุติโครงการ":"var(--grey)","รอคืนเงิน":"var(--red)"
+};
+const HEALTH_COLOR = {"ปกติ":"var(--green)","ใกล้กำหนด":"var(--amber)","ล่าช้า":"var(--red)","เสร็จสิ้น":"var(--grey)"};
+
+/* ---------- API helper (POST text/plain เพื่อเลี่ยง CORS preflight) ---------- */
+async function api(action, payload={}){
+  if(API_URL.startsWith("PUT_")) throw new Error("ยังไม่ได้ตั้งค่า API_URL ในไฟล์ index.html");
+  const res = await fetch(API_URL, {
+    method:"POST",
+    headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body: JSON.stringify({ action, token: STATE.token, payload })
+  });
+  const data = await res.json();
+  if(data.ok===false && data.error==="unauthorized"){ logout(); throw new Error("เซสชันหมดอายุ"); }
+  return data;
+}
+
+/* ---------- Login ---------- */
+function quick(id){ document.getElementById("uid").value=id; document.getElementById("pwd").value="1234"; doLogin(); }
+
+async function doLogin(){
+  document.getElementById("loginerr").textContent="";
+  const userId=document.getElementById("uid").value.trim();
+  const password=document.getElementById("pwd").value;
+  try{
+    const r=await api("login",{userId,password});
+    if(!r.ok){ document.getElementById("loginerr").textContent=r.error||"เข้าสู่ระบบไม่สำเร็จ"; return; }
+    STATE.user=r.user; STATE.token=r.token;
+    document.getElementById("login").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    document.getElementById("whoName").textContent=r.user.name;
+    document.getElementById("whoRole").textContent=r.user.roleLabel;
+    buildNav();
+    await refresh();
+  }catch(e){ document.getElementById("loginerr").textContent=e.message; }
+}
+
+function logout(){
+  STATE={user:null,token:null,projects:[],budget:[],due:[],users:[],page:"dash"};
+  document.getElementById("app").classList.add("hidden");
+  document.getElementById("login").classList.remove("hidden");
+}
+
+/* ---------- Navigation by role ---------- */
+const MENUS = {
+  admin:   [["dash","Dashboard"],["projects","โครงการวิจัย"],["budget","งบประมาณรายปี"],["reminders","การติดตาม/แจ้งเตือน"],["evals","การประเมิน"],["users","จัดการผู้ใช้"]],
+  staff:   [["dash","Dashboard"],["projects","โครงการวิจัย"],["budget","งบประมาณรายปี"],["reminders","การติดตาม/แจ้งเตือน"],["evals","การประเมิน"]],
+  dean:    [["overview","ภาพรวมผู้บริหาร"]],
+  reviewer:[["myreviews","งานประเมินของฉัน"]]
+};
+function buildNav(){
+  const menu=MENUS[STATE.user.role]||[];
+  STATE.page=menu[0][0];
+  const nav=document.getElementById("nav");
+  nav.innerHTML=menu.map(([k,label])=>{
+    const badge = k==="reminders" ? `<span class="n">${STATE.due.length||""}</span>`:"";
+    return `<div class="nav ${k===STATE.page?'active':''}" onclick="go('${k}')">${esc(label)}${badge}</div>`;
+  }).join("");
+}
+function go(page){ STATE.page=page; buildNav(); render(); }
+
+/* ---------- Load data ---------- */
+async function refresh(){
+  const [pr,bg,du]=await Promise.all([api("listProjects"),api("listBudget"),api("dueSoon")]);
+  STATE.projects=pr.data||[]; STATE.budget=bg.data||[]; STATE.due=du.data||[];
+  if(STATE.user.role==="admin"){ try{ STATE.users=(await api("listUsers")).data||[]; }catch(e){} }
+  buildNav(); render();
+}
+
+/* ---------- Router ---------- */
+function render(){
+  const titles={dash:"Dashboard ทีมงาน",projects:"โครงการวิจัย",budget:"งบประมาณรายปี",
+    reminders:"การติดตาม / แจ้งเตือน",evals:"การประเมิน",users:"จัดการผู้ใช้",
+    overview:"ภาพรวมผู้บริหาร",myreviews:"งานประเมินของฉัน"};
+  document.getElementById("pageTitle").textContent=titles[STATE.page]||"";
+  document.getElementById("pageActions").innerHTML="";
+  const v=document.getElementById("view");
+  ({dash:viewDash,projects:viewProjects,budget:viewBudget,reminders:viewReminders,
+    evals:viewEvals,users:viewUsers,overview:viewOverview,myreviews:viewMyReviews}[STATE.page]||viewDash)(v);
+}
+
+/* ---------- Views ---------- */
+function statusBadge(s){ return `<span class="badge" style="background:${STATUS_COLOR[s]||'var(--grey)'}">${esc(s)}</span>`; }
+function healthBadge(h){ return `<span class="pill" style="color:${HEALTH_COLOR[h]};border-color:${HEALTH_COLOR[h]}">${esc(h)}</span>`; }
+
+function viewDash(v){
+  const P=STATE.projects;
+  const active=P.filter(p=>["ปกติ","ใกล้กำหนด","ล่าช้า"].includes(p.health)).length;
+  const late=P.filter(p=>p.health==="ล่าช้า").length;
+  const soon=P.filter(p=>p.health==="ใกล้กำหนด").length;
+  const paid=P.reduce((s,p)=>s+p.paid,0);
+  v.innerHTML=`
+    <div class="grid kpis" style="margin-bottom:16px">
+      ${kpi(P.length,"โครงการทั้งหมด")}${kpi(active,"กำลังดำเนินการ")}
+      ${kpi(soon,"ใกล้กำหนด","var(--amber)")}${kpi(late,"ล่าช้า","var(--red)")}
+      ${kpi(fmtBaht(paid)+" ฿","เบิกจ่ายสะสม")}
+    </div>
+    <div class="card">${projectTable(P)}</div>`;
+}
+function kpi(v,l,color){ return `<div class="card kpi"><div class="v" style="color:${color||'var(--ink)'}">${v}</div><div class="l">${l}</div></div>`; }
+
+function projectTable(list){
+  if(!list.length) return `<p class="muted">ไม่มีข้อมูล</p>`;
+  return `<table><thead><tr><th>รหัส</th><th>ชื่อโครงการ</th><th>หัวหน้า</th><th>สถานะ</th><th>สุขภาพ</th><th>กำหนดถัดไป</th></tr></thead><tbody>${
+    list.map(p=>`<tr class="click" onclick="openDrawer('${p.id}')">
+      <td><b>${esc(p.id)}</b></td><td>${esc(p.title)}</td><td>${esc(p.pi)}</td>
+      <td>${statusBadge(p.status)}</td><td>${healthBadge(p.health)}</td>
+      <td>${p.milestone?fmtDate(p.milestone.date)+` <span class="muted">(${p.milestone.daysLeft} วัน)</span>`:"—"}</td>
+    </tr>`).join("")}</tbody></table>`;
+}
+
+function viewProjects(v){
+  if(["admin","staff"].includes(STATE.user.role))
+    document.getElementById("pageActions").innerHTML=`<button class="btn" onclick="alert('แบบฟอร์มเพิ่มโครงการเชื่อม createProject API — ใส่ UI ฟอร์มเพิ่มเติมได้ตามต้องการ')">+ เพิ่มโครงการ</button>`;
+  v.innerHTML=`<div class="card">${projectTable(STATE.projects)}</div>`;
+}
+
+function viewBudget(v){
+  v.innerHTML=`<div class="card"><table><thead><tr><th>ปีงบประมาณ (พ.ศ.)</th><th>จัดสรร</th><th>ผูกพัน</th><th>เบิกจ่าย</th><th>คงเหลือ</th><th style="width:160px">สัดส่วนผูกพัน</th></tr></thead><tbody>${
+    STATE.budget.map(b=>{const pct=b.allocated?Math.min(100,Math.round(b.committed/b.allocated*100)):0;
+      return `<tr><td><b>${b.year}</b></td><td>${fmtBaht(b.allocated)}</td><td>${fmtBaht(b.committed)}</td>
+        <td>${fmtBaht(b.paid)}</td><td>${fmtBaht(b.remaining)}</td>
+        <td><div class="bar"><i style="width:${pct}%"></i></div><span class="muted" style="font-size:11px">${pct}%</span></td></tr>`;}).join("")
+  }</tbody></table></div>`;
+}
+
+function viewReminders(v){
+  if(!STATE.due.length){ v.innerHTML=`<div class="card"><p class="muted">ไม่มีรายการใกล้กำหนด/ล่าช้า</p></div>`; return; }
+  v.innerHTML=`<div class="card"><table><thead><tr><th>รหัส</th><th>โครงการ</th><th>รายการ</th><th>กำหนด</th><th>เหลือ</th><th></th></tr></thead><tbody>${
+    STATE.due.map(d=>`<tr><td><b>${esc(d.id)}</b></td><td>${esc(d.title)}</td><td>${esc(d.label)}</td>
+      <td>${fmtDate(d.dueDate)}</td><td>${healthBadge(d.health)} ${d.daysLeft} วัน</td>
+      <td><button class="btn amber" onclick="sendReminder('${d.id}')">ส่งอีเมลเตือน</button></td></tr>`).join("")
+  }</tbody></table></div>`;
+}
+async function sendReminder(id){
+  if(!confirm("ส่งอีเมลแจ้งเตือนไปยังผู้ขอทุน?")) return;
+  const r=await api("sendReminder",{projectId:id});
+  alert(r.ok?"ส่งอีเมลแล้ว":("ส่งไม่สำเร็จ: "+(r.error||"")));
+}
+
+function viewEvals(v){
+  const list=STATE.projects.filter(p=>p.reviewers&&p.reviewers.length);
+  v.innerHTML=list.length?list.map(p=>`<div class="card" style="margin-bottom:12px">
+    <b>${esc(p.id)}</b> — ${esc(p.title)} ${statusBadge(p.status)}
+    <table style="margin-top:8px"><thead><tr><th>ผู้ประเมิน</th><th>สถานะ</th><th>ผล</th><th>หมายเหตุ</th></tr></thead><tbody>${
+      p.reviewers.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.status)}</td>
+        <td>${r.result?`<span class="pill" style="border-color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'};color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'}">${esc(r.result)}</span>`:'—'}</td>
+        <td class="muted">${esc(r.note||'—')}</td></tr>`).join("")
+    }</tbody></table></div>`).join(""):`<div class="card"><p class="muted">ยังไม่มีโครงการที่อยู่ระหว่างประเมิน</p></div>`;
+}
+
+function viewUsers(v){
+  v.innerHTML=`<div class="card"><table><thead><tr><th>รหัสผู้ใช้</th><th>ชื่อ</th><th>บทบาท</th><th>อีเมล</th><th>โทร</th></tr></thead><tbody>${
+    STATE.users.map(u=>`<tr><td><b>${esc(u.id)}</b></td><td>${esc(u.name)}</td><td>${esc(u.roleLabel)}</td>
+      <td>${esc(u.email)}</td><td>${esc(u.phone)}</td></tr>`).join("")
+  }</tbody></table></div>`;
+}
+
+function viewOverview(v){
+  const P=STATE.projects;
+  const byStatus={};
+  P.forEach(p=>byStatus[p.status]=(byStatus[p.status]||0)+1);
+  v.innerHTML=`
+    <div class="grid kpis" style="margin-bottom:16px">
+      ${kpi(P.length,"โครงการทั้งหมด")}
+      ${kpi(P.filter(p=>p.status==="ปิดโครงการ").length,"ปิดโครงการแล้ว","var(--green)")}
+      ${kpi(P.filter(p=>p.health==="ล่าช้า").length,"ล่าช้า","var(--red)")}
+      ${kpi(fmtBaht(STATE.budget.reduce((s,b)=>s+b.allocated,0))+" ฿","งบจัดสรรรวม")}
+    </div>
+    <div class="card" style="margin-bottom:14px"><h3 style="margin-bottom:10px">งบประมาณรายปี</h3>${
+      STATE.budget.map(b=>{const pct=b.allocated?Math.round(b.committed/b.allocated*100):0;
+        return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between"><span><b>${b.year}</b></span><span class="muted">ผูกพัน ${fmtBaht(b.committed)} / ${fmtBaht(b.allocated)}</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>`;}).join("")
+    }</div>
+    <div class="card"><h3 style="margin-bottom:10px">สถานะโครงการ</h3>${
+      Object.entries(byStatus).map(([s,n])=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)">${statusBadge(s)}<b>${n}</b></div>`).join("")
+    }</div>`;
+}
+
+function viewMyReviews(v){
+  const me=STATE.user.name;
+  const tasks=[];
+  STATE.projects.forEach(p=>(p.reviewers||[]).forEach(r=>{ if(r.name===me) tasks.push({p,r}); }));
+  v.innerHTML=tasks.length?tasks.map(({p,r})=>`<div class="card" style="margin-bottom:12px">
+    <b>${esc(p.id)}</b> — ${esc(p.title)}<br><span class="muted">${esc(p.pi)} · ${esc(p.dept)}</span>
+    <div style="margin-top:10px">${r.status==="ประเมินแล้ว"
+      ? `ผลของคุณ: <span class="pill">${esc(r.result||'-')}</span> <span class="muted">${esc(r.note||'')}</span>`
+      : `<button class="btn green" onclick="submitReview('${p.id}','ผ่าน')">ผ่าน</button>
+         <button class="btn amber" onclick="submitReview('${p.id}','ให้แก้ไข')">ให้แก้ไข</button>`}</div>
+  </div>`).join(""):`<div class="card"><p class="muted">ยังไม่มีงานประเมินที่ได้รับมอบหมาย</p></div>`;
+}
+async function submitReview(projectId,result){
+  const note=prompt("หมายเหตุการประเมิน (ถ้ามี):")||"";
+  const r=await api("setEvaluation",{projectId,reviewerName:STATE.user.name,result,note});
+  if(r.ok){ await refresh(); } else alert("บันทึกไม่สำเร็จ: "+(r.error||""));
+}
+
+/* ---------- Drawer (รายละเอียดโครงการ) ---------- */
+function openDrawer(id){
+  const p=STATE.projects.find(x=>x.id===id); if(!p) return;
+  const dr=document.getElementById("drawer");
+  dr.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:start">
+      <div><h2 style="font-size:18px;color:var(--oxblood)">${esc(p.title)}</h2>
+        <span class="muted">${esc(p.id)} · ${esc(p.dept)}</span></div>
+      <button class="btn ghost" onclick="closeDrawer()">ปิด</button>
+    </div>
+    <div style="margin-top:10px">${statusBadge(p.status)} ${healthBadge(p.health)}</div>
+
+    <div class="sect"><h3>ข้อมูลหัวหน้าโครงการ</h3>
+      <div>${esc(p.pi)}</div>
+      <div class="muted"><a href="tel:${esc(p.piPhone)}">${esc(p.piPhone)}</a> · <a href="mailto:${esc(p.piEmail)}">${esc(p.piEmail)}</a></div>
+      <div class="row2" style="margin-top:8px">
+        <div><label>ปีงบประมาณ</label>${p.budgetYear}</div>
+        <div><label>ระยะเวลา</label>${p.durationMonths} เดือน</div>
+        <div><label>วันทำสัญญา</label>${fmtDate(p.contractDate)}</div>
+        <div><label>วงเงินรวม</label>${fmtBaht(p.total)} ฿</div>
+      </div>
+      ${p.milestone?`<div class="note" style="margin-top:10px">⏰ ${esc(p.milestone.label)} — ${fmtDate(p.milestone.date)} (เหลือ ${p.milestone.daysLeft} วัน)</div>`:""}
+    </div>
+
+    <div class="sect"><h3>การจ่ายเงิน 3 งวด</h3>
+      <table><tbody>${p.installments.map(i=>`<tr>
+        <td>งวดที่ ${i.no}</td><td>${fmtBaht(i.amount)} ฿</td>
+        <td>${i.paid?`<span class="pill" style="color:var(--green);border-color:var(--green)">จ่ายแล้ว ${fmtDate(i.paidDate)}</span>`:`<span class="pill">รอจ่าย</span>`}</td>
+      </tr>`).join("")}</tbody></table>
+      <div class="muted" style="margin-top:6px">เบิกจ่ายแล้ว ${fmtBaht(p.paid)} / คงเหลือ ${fmtBaht(p.remaining)} ฿</div>
+    </div>
+
+    ${p.refund?`<div class="sect"><h3>การคืนเงิน</h3>
+      <div class="row2"><div><label>ต้องคืน</label>${fmtBaht(p.refund.required)} ฿</div>
+        <div><label>คืนแล้ว</label>${fmtBaht(p.refund.returned)} ฿</div>
+        <div><label>คงค้าง</label><b style="color:var(--red)">${fmtBaht(p.refund.required-p.refund.returned)} ฿</b></div>
+        <div><label>กำหนดคืน</label>${fmtDate(p.refund.deadline)}</div></div></div>`:""}
+
+    ${p.reviewers.length?`<div class="sect"><h3>ผู้ประเมิน</h3>${p.reviewers.map(r=>`
+      <div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:6px">
+        <b>${esc(r.name)}</b> ${r.result?`<span class="pill" style="float:right;color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'};border-color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'}">${esc(r.result)}</span>`:`<span class="pill" style="float:right">${esc(r.status)}</span>`}
+        <div class="muted" style="font-size:12px">${esc(r.email||'')} · ${esc(r.phone||'')}</div>
+        ${r.note?`<div style="font-size:12px;margin-top:4px">${esc(r.note)}</div>`:""}
+      </div>`).join("")}</div>`:""}
+
+    ${p.attachments.length?`<div class="sect"><h3>เอกสารแนบ</h3>${p.attachments.map(a=>`
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)">
+        <span>📄 ${esc(a.name)}</span><span class="muted" style="font-size:12px">${esc(a.by)} · ${fmtDate(a.date)}</span>
+      </div>`).join("")}</div>`:""}
+  `;
+  document.getElementById("scrim").classList.remove("hidden");
+  dr.classList.remove("hidden");
+}
+function closeDrawer(){
+  document.getElementById("scrim").classList.add("hidden");
+  document.getElementById("drawer").classList.add("hidden");
+}
+
+/* ---------- init ---------- */
+if(API_URL.startsWith("PUT_")){
+  const w=document.getElementById("apiwarn");
+  w.classList.remove("hidden");
+  w.innerHTML="⚠️ ยังไม่ได้ตั้งค่า <b>API_URL</b> — เปิดไฟล์ index.html แล้วใส่ URL ของ GAS Web App (ลงท้าย /exec) ที่บรรทัดบนสุดของ &lt;script&gt;";
+}
+</script>
+</body>
+</html>

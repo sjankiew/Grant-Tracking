@@ -131,15 +131,21 @@ const STATUS_COLOR = {
 const HEALTH_COLOR = {"ปกติ":"var(--green)","ใกล้กำหนด":"var(--amber)","ล่าช้า":"var(--red)","เสร็จสิ้น":"var(--grey)"};
 
 /* ---------- API helper (POST text/plain เพื่อเลี่ยง CORS preflight) ---------- */
-async function api(action, payload={}){
-  if(API_URL.startsWith("PUT_")) throw new Error("ยังไม่ได้ตั้งค่า API_URL ในไฟล์ index.html");
-  const res = await fetch(API_URL, {
-    method:"POST",
-    headers:{"Content-Type":"text/plain;charset=utf-8"},
-    body: JSON.stringify({ action, token: STATE.token, payload })
+async function api(action, payload = {}) {
+  const params = new URLSearchParams({
+    action,
+    token: STATE.token || "",
+    ...payload
+  });
+  const res = await fetch(API_URL + "?" + params.toString(), {
+    method: "GET",
+    redirect: "follow"
   });
   const data = await res.json();
-  if(data.ok===false && data.error==="unauthorized"){ logout(); throw new Error("เซสชันหมดอายุ"); }
+  if (data.ok === false && data.error === "unauthorized") {
+    logout();
+    throw new Error("เซสชันหมดอายุ");
+  }
   return data;
 }
 

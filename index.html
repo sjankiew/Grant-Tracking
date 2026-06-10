@@ -69,6 +69,23 @@
   .loading{display:flex;align-items:center;gap:10px;color:var(--muted);padding:20px;}
   .spinner{width:20px;height:20px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
+  /* Modal */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:flex;align-items:center;justify-content:center;padding:16px;}
+  .modal{background:#fff;border-radius:16px;width:100%;max-width:580px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+  .modal-header{display:flex;justify-content:space-between;align-items:center;padding:20px 24px 16px;border-bottom:1px solid var(--line);}
+  .modal-header h2{font-size:18px;color:var(--oxblood);}
+  .modal-body{padding:20px 24px;}
+  .modal-footer{padding:16px 24px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px;}
+  .field{margin-bottom:14px;}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+  .field-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;}
+  .reviewer-card{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--ivory);}
+  .reviewer-card .rc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-weight:600;font-size:13px;color:var(--oxblood);}
+  .section-label{font-size:13px;font-weight:700;color:var(--ink);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);}
+  input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(43,95,138,.12);}
+  .btn-icon{background:transparent;border:1px solid var(--line);color:var(--red);padding:4px 10px;font-size:12px;border-radius:6px;}
+  .btn-icon:hover{background:#fff0f0;}
+  .saving{opacity:.6;pointer-events:none;}
 </style>
 </head>
 <body>
@@ -301,7 +318,7 @@ function viewBudget(v){
   if(!S.budget.length){ v.innerHTML=loading(); return; }
   v.innerHTML = `<div class="card"><table><thead><tr>
     <th>ปีงบประมาณ (พ.ศ.)</th><th>จัดสรร</th><th>ผูกพัน</th>
-    <th>เบิกจ่าย</th><th>คงเหลือ</th><th style="width:160px">สัดส่วนผูกพัน</th>
+    <th>เบิกจ่าย</th><th>คงเหลือ</th><th style="width:160px">สัดส่วนผูกพัน</th><th></th>
   </tr></thead><tbody>${S.budget.map(b=>{
     const pct = b.allocated ? Math.min(100,Math.round(b.committed/b.allocated*100)) : 0;
     return `<tr>
@@ -310,6 +327,8 @@ function viewBudget(v){
       <td>${fmtBaht(b.paid)}</td><td>${fmtBaht(b.remaining)}</td>
       <td><div class="bar"><i style="width:${pct}%"></i></div>
         <span class="muted" style="font-size:11px">${pct}%</span></td>
+      <td><button class="btn ghost" style="padding:5px 10px;font-size:12px"
+        onclick='showAddBudget(${JSON.stringify(b)})'>✎ แก้ไข</button></td>
     </tr>`;}).join("")}</tbody></table></div>`;
 }
 
@@ -500,17 +519,268 @@ function closeDrawer(){
   document.getElementById("drawer").classList.add("hidden");
 }
 
-// ======== QUICK FORMS ========
-function showAddProject(){
-  alert("ฟอร์มเพิ่มโครงการ — เชื่อม API createProject แล้ว\nแจ้งผู้พัฒนาเพื่อเปิดใช้งาน dialog นี้เต็มรูปแบบ");
+// ======== MODAL ENGINE ========
+function openModal(html){
+  let el = document.getElementById("modalRoot");
+  if(!el){ el=document.createElement("div"); el.id="modalRoot"; document.body.appendChild(el); }
+  el.innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this)closeModal()">${html}</div>`;
 }
-function showAddBudget(){
-  const year = prompt("ปีงบประมาณ (พ.ศ.):");
-  if(!year) return;
-  const allocated = prompt("งบจัดสรร (บาท):");
-  if(!allocated) return;
-  api("upsertBudget",{budgetYear:Number(year),allocated:Number(allocated)})
-    .then(r=>{ if(r.ok){ alert("บันทึกแล้ว"); refresh(); } else alert("ผิดพลาด: "+(r.error||"")); });
+function closeModal(){
+  const el = document.getElementById("modalRoot");
+  if(el) el.innerHTML = "";
+}
+
+// ======== MODAL: เพิ่ม/แก้ไข โครงการ ========
+function showAddProject(existing){
+  const p = existing || {};
+  const isEdit = !!p.id;
+  const statuses = ["ทำสัญญาแล้ว","รายงานความก้าวหน้าครั้งที่ 1","ส่งเล่มสมบูรณ์","รอการประเมิน","ปิดโครงการ","ยุติโครงการ","รอคืนเงิน"];
+  const inst = p.installments || [{no:1,amount:"",paid:false,paidDate:""},{no:2,amount:"",paid:false,paidDate:""},{no:3,amount:"",paid:false,paidDate:""}];
+  const revs = p.reviewers || [];
+
+  openModal(`<div class="modal">
+    <div class="modal-header">
+      <h2>${isEdit?"✎ แก้ไขโครงการ":"+ เพิ่มโครงการวิจัย"}</h2>
+      <button class="btn ghost" style="padding:6px 12px" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="section-label">ข้อมูลโครงการ</div>
+      <div class="field">
+        <label>ชื่อโครงการ *</label>
+        <input id="f_title" value="${esc(p.title||"")}" placeholder="ชื่อโครงการวิจัย"/>
+      </div>
+      <div class="field-row">
+        <div><label>ปีงบประมาณ (พ.ศ.) *</label>
+          <input id="f_year" type="number" value="${p.budgetYear||2569}" placeholder="2569"/></div>
+        <div><label>ระยะเวลา (เดือน) *</label>
+          <input id="f_duration" type="number" value="${p.durationMonths||12}" placeholder="12"/></div>
+      </div>
+      <div class="field-row">
+        <div><label>วันทำสัญญา *</label>
+          <input id="f_contract" type="date" value="${p.contractDate||""}"/></div>
+        <div><label>วงเงินรวม (บาท) *</label>
+          <input id="f_total" type="number" value="${p.total||""}" placeholder="500000"/></div>
+      </div>
+      <div class="field-row">
+        <div><label>คณะ/หน่วยงาน</label>
+          <input id="f_dept" value="${esc(p.dept||"")}" placeholder="คณะวิทยาศาสตร์"/></div>
+        <div><label>สถานะ</label>
+          <select id="f_status">${statuses.map(s=>`<option value="${s}"${(p.status||"ทำสัญญาแล้ว")===s?" selected":""}>${s}</option>`).join("")}</select></div>
+      </div>
+
+      <div class="section-label">หัวหน้าโครงการ</div>
+      <div class="field">
+        <label>ชื่อ-นามสกุล *</label>
+        <input id="f_pi" value="${esc(p.pi||"")}" placeholder="ดร. ชื่อ นามสกุล"/>
+      </div>
+      <div class="field-row">
+        <div><label>เบอร์โทร</label>
+          <input id="f_phone" value="${esc(p.piPhone||"")}" placeholder="081-234-5678"/></div>
+        <div><label>อีเมล</label>
+          <input id="f_email" type="email" value="${esc(p.piEmail||"")}" placeholder="name@univ.ac.th"/></div>
+      </div>
+
+      <div class="section-label">การจ่ายเงิน 3 งวด</div>
+      ${inst.map((i,idx)=>`
+        <div style="display:grid;grid-template-columns:80px 1fr 120px 130px;gap:8px;margin-bottom:8px;align-items:end">
+          <div><label>งวดที่ ${i.no}</label><div style="padding:9px 0;font-weight:600;color:var(--muted)">งวด ${i.no}</div></div>
+          <div><label>จำนวนเงิน (฿)</label>
+            <input id="f_inst${idx}_amt" type="number" value="${i.amount||""}" placeholder="0"/></div>
+          <div><label>จ่ายแล้ว</label>
+            <select id="f_inst${idx}_paid">
+              <option value="false"${!i.paid?" selected":""}>รอจ่าย</option>
+              <option value="true"${i.paid?" selected":""}>จ่ายแล้ว</option>
+            </select></div>
+          <div><label>วันที่จ่าย</label>
+            <input id="f_inst${idx}_date" type="date" value="${i.paidDate||""}"/></div>
+        </div>`).join("")}
+
+      <div class="section-label">ผู้ประเมิน (สูงสุด 3 ท่าน)</div>
+      <div id="reviewerList">${renderReviewerFields(revs)}</div>
+      <button class="btn ghost" style="width:100%;margin-top:4px" onclick="addReviewerField()" id="addRevBtn">+ เพิ่มผู้ประเมิน</button>
+
+    </div>
+    <div class="modal-footer">
+      <div id="formErr" style="color:var(--red);font-size:12px;margin-right:auto;align-self:center"></div>
+      <button class="btn ghost" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn" id="saveProjectBtn" onclick="saveProject('${p.id||""}')">${isEdit?"บันทึกการแก้ไข":"สร้างโครงการ"}</button>
+    </div>
+  </div>`);
+}
+
+function renderReviewerFields(revs){
+  return revs.map((r,i)=>`
+    <div class="reviewer-card" id="rev_${i}">
+      <div class="rc-head">ผู้ประเมินท่านที่ ${i+1}
+        <button class="btn-icon" onclick="removeReviewer(${i})">✕ ลบ</button>
+      </div>
+      <div class="field-row3">
+        <div style="grid-column:span 3"><label>ชื่อ-นามสกุล</label>
+          <input class="rv-name" value="${esc(r.name||"")}" placeholder="ศ.ดร. ชื่อ นามสกุล"/></div>
+        <div><label>เบอร์โทร</label><input class="rv-phone" value="${esc(r.phone||"")}" placeholder="081-000-0000"/></div>
+        <div style="grid-column:span 2"><label>อีเมล</label><input class="rv-email" value="${esc(r.email||"")}" placeholder="name@univ.ac.th"/></div>
+      </div>
+    </div>`).join("");
+}
+
+function addReviewerField(){
+  const list = document.getElementById("reviewerList");
+  const current = list.querySelectorAll(".reviewer-card").length;
+  if(current >= 3){ alert("เพิ่มผู้ประเมินได้สูงสุด 3 ท่าน"); return; }
+  const div = document.createElement("div");
+  div.innerHTML = renderReviewerFields([{name:"",phone:"",email:""}]).replace('id="rev_0"',`id="rev_${current}"`).replace("removeReviewer(0)",`removeReviewer(${current})`).replace("ท่านที่ 1",`ท่านที่ ${current+1}`);
+  list.appendChild(div.firstElementChild);
+  if(list.querySelectorAll(".reviewer-card").length >= 3)
+    document.getElementById("addRevBtn").style.display="none";
+}
+
+function removeReviewer(idx){
+  const el = document.getElementById(`rev_${idx}`);
+  if(el) el.remove();
+  document.getElementById("addRevBtn").style.display="";
+  // re-number
+  document.querySelectorAll(".reviewer-card").forEach((c,i)=>{
+    c.id=`rev_${i}`;
+    const h=c.querySelector(".rc-head");
+    h.childNodes[0].textContent=`ผู้ประเมินท่านที่ ${i+1} `;
+    const btn=c.querySelector(".btn-icon");
+    btn.setAttribute("onclick",`removeReviewer(${i})`);
+  });
+}
+
+async function saveProject(existingId){
+  const btn = document.getElementById("saveProjectBtn");
+  const errEl = document.getElementById("formErr");
+  errEl.textContent = "";
+
+  const title    = document.getElementById("f_title").value.trim();
+  const pi       = document.getElementById("f_pi").value.trim();
+  const year     = Number(document.getElementById("f_year").value);
+  const duration = Number(document.getElementById("f_duration").value);
+  const contract = document.getElementById("f_contract").value;
+  const total    = Number(document.getElementById("f_total").value);
+  const dept     = document.getElementById("f_dept").value.trim();
+  const status   = document.getElementById("f_status").value;
+  const piPhone  = document.getElementById("f_phone").value.trim();
+  const piEmail  = document.getElementById("f_email").value.trim();
+
+  // Validate
+  if(!title){ errEl.textContent="กรุณากรอกชื่อโครงการ"; return; }
+  if(!pi)   { errEl.textContent="กรุณากรอกชื่อหัวหน้าโครงการ"; return; }
+  if(!contract){ errEl.textContent="กรุณาเลือกวันทำสัญญา"; return; }
+  if(!total){ errEl.textContent="กรุณากรอกวงเงินรวม"; return; }
+
+  // Installments
+  const installments = [0,1,2].map(idx=>({
+    no: idx+1,
+    amount: Number(document.getElementById(`f_inst${idx}_amt`).value)||0,
+    paid: document.getElementById(`f_inst${idx}_paid`).value==="true",
+    paidDate: document.getElementById(`f_inst${idx}_date`).value||""
+  }));
+
+  // Reviewers
+  const reviewers = [];
+  document.querySelectorAll(".reviewer-card").forEach(card=>{
+    const name = card.querySelector(".rv-name").value.trim();
+    if(name) reviewers.push({
+      name, status:"รอประเมิน",
+      phone: card.querySelector(".rv-phone").value.trim(),
+      email: card.querySelector(".rv-email").value.trim()
+    });
+  });
+
+  const payload = { title, pi, piPhone, piEmail, dept, budgetYear:year,
+    total, contractDate:contract, durationMonths:duration, status, installments, reviewers };
+  if(existingId) payload.id = existingId;
+
+  btn.classList.add("saving");
+  btn.textContent = "กำลังบันทึก...";
+
+  try {
+    const action = existingId ? "updateProject" : "createProject";
+    const r = await api(action, payload);
+    if(!r.ok){ errEl.textContent = r.error||"บันทึกไม่สำเร็จ"; btn.classList.remove("saving"); btn.textContent=existingId?"บันทึกการแก้ไข":"สร้างโครงการ"; return; }
+    closeModal();
+    await refresh();
+  } catch(e){
+    errEl.textContent = e.message;
+    btn.classList.remove("saving");
+    btn.textContent = existingId?"บันทึกการแก้ไข":"สร้างโครงการ";
+  }
+}
+
+// ======== MODAL: เพิ่ม/แก้ไข ปีงบประมาณ ========
+function showAddBudget(existing){
+  const b = existing || {};
+  openModal(`<div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <h2>${b.year?"✎ แก้ไขงบประมาณ":"+ เพิ่มปีงบประมาณ"}</h2>
+      <button class="btn ghost" style="padding:6px 12px" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>ปีงบประมาณ (พ.ศ.) *</label>
+        <input id="b_year" type="number" value="${b.year||""}" placeholder="2570"
+          ${b.year?"readonly style='background:var(--ivory);color:var(--muted)'":''}/>
+      </div>
+      <div class="field">
+        <label>งบประมาณที่จัดสรร (บาท) *</label>
+        <input id="b_amount" type="number" value="${b.allocated||""}" placeholder="7000000"/>
+      </div>
+      ${b.year?`
+        <div style="background:var(--ivory);border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:4px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span class="muted">ผูกพันแล้ว</span><b>${fmtBaht(b.committed)} ฿</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span class="muted">เบิกจ่ายแล้ว</span><b>${fmtBaht(b.paid)} ฿</b>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span class="muted">คงเหลือ (หลังแก้ไข)</span>
+            <b id="b_remaining" style="color:var(--green)">—</b>
+          </div>
+        </div>`:""}
+    </div>
+    <div class="modal-footer">
+      <div id="budgetErr" style="color:var(--red);font-size:12px;margin-right:auto;align-self:center"></div>
+      <button class="btn ghost" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn" id="saveBudgetBtn" onclick="saveBudget(${b.year||0})">${b.year?"บันทึกการแก้ไข":"เพิ่มปีงบประมาณ"}</button>
+    </div>
+  </div>`);
+
+  // live preview คงเหลือ
+  if(b.year){
+    document.getElementById("b_amount").addEventListener("input", e=>{
+      const rem = Number(e.target.value||0) - (b.committed||0);
+      const el = document.getElementById("b_remaining");
+      el.textContent = fmtBaht(rem) + " ฿";
+      el.style.color = rem < 0 ? "var(--red)" : "var(--green)";
+    });
+    // trigger ครั้งแรก
+    document.getElementById("b_amount").dispatchEvent(new Event("input"));
+  }
+}
+
+async function saveBudget(existingYear){
+  const btn = document.getElementById("saveBudgetBtn");
+  const errEl = document.getElementById("budgetErr");
+  errEl.textContent = "";
+  const year   = Number(document.getElementById("b_year").value);
+  const amount = Number(document.getElementById("b_amount").value);
+  if(!year)  { errEl.textContent="กรุณากรอกปีงบประมาณ"; return; }
+  if(!amount){ errEl.textContent="กรุณากรอกจำนวนงบ"; return; }
+  btn.classList.add("saving"); btn.textContent="กำลังบันทึก...";
+  try {
+    const r = await api("upsertBudget",{budgetYear:year, allocated:amount});
+    if(!r.ok){ errEl.textContent=r.error||"บันทึกไม่สำเร็จ"; btn.classList.remove("saving"); btn.textContent=existingYear?"บันทึกการแก้ไข":"เพิ่มปีงบประมาณ"; return; }
+    closeModal();
+    await refresh();
+  } catch(e){
+    errEl.textContent=e.message;
+    btn.classList.remove("saving");
+    btn.textContent=existingYear?"บันทึกการแก้ไข":"เพิ่มปีงบประมาณ";
+  }
 }
 </script>
 </body>

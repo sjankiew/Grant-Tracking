@@ -153,20 +153,26 @@ async function api(action, payload = {}) {
 function quick(id){ document.getElementById("uid").value=id; document.getElementById("pwd").value="1234"; doLogin(); }
 
 async function doLogin(){
-  document.getElementById("loginerr").textContent="";
-  const userId=document.getElementById("uid").value.trim();
-  const password=document.getElementById("pwd").value;
-  try{
-    const r=await api("login",{userId,password});
-    if(!r.ok){ document.getElementById("loginerr").textContent=r.error||"เข้าสู่ระบบไม่สำเร็จ"; return; }
-    STATE.user=r.user; STATE.token=r.token;
+  document.getElementById("loginerr").textContent = "";
+  const userId = document.getElementById("uid").value.trim();
+  const password = document.getElementById("pwd").value;
+  try {
+    const r = await api("login", {userId, password});
+    if (!r.ok) { document.getElementById("loginerr").textContent = r.error || "เข้าสู่ระบบไม่สำเร็จ"; return; }
+    STATE.user = r.user;
+    STATE.token = r.token;
+    // ตั้ง page เริ่มต้นตาม role ตรงนี้ครั้งเดียว
+    const menu = MENUS[r.user.role] || [];
+    STATE.page = menu[0] ? menu[0][0] : "dash";
     document.getElementById("login").classList.add("hidden");
     document.getElementById("app").classList.remove("hidden");
-    document.getElementById("whoName").textContent=r.user.name;
-    document.getElementById("whoRole").textContent=r.user.roleLabel;
+    document.getElementById("whoName").textContent = r.user.name;
+    document.getElementById("whoRole").textContent = r.user.roleLabel;
     buildNav();
     await refresh();
-  }catch(e){ document.getElementById("loginerr").textContent=e.message; }
+  } catch(e) {
+    document.getElementById("loginerr").textContent = e.message;
+  }
 }
 
 function logout(){
@@ -184,14 +190,13 @@ const MENUS = {
 };
 function buildNav(){
   const menu=MENUS[STATE.user.role]||[];
-  STATE.page=menu[0][0];
   const nav=document.getElementById("nav");
   nav.innerHTML=menu.map(([k,label])=>{
     const badge = k==="reminders" ? `<span class="n">${STATE.due.length||""}</span>`:"";
     return `<div class="nav ${k===STATE.page?'active':''}" onclick="go('${k}')">${esc(label)}${badge}</div>`;
   }).join("");
 }
-function go(page){ STATE.page=page; buildNav(); render(); }
+
 
 /* ---------- Load data ---------- */
 async function refresh(){

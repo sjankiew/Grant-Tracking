@@ -132,12 +132,12 @@ const HEALTH_COLOR = {"ปกติ":"var(--green)","ใกล้กำหนด
 
 /* ---------- API helper (POST text/plain เพื่อเลี่ยง CORS preflight) ---------- */
 async function api(action, payload = {}) {
-  const params = new URLSearchParams({
-    action,
-    token: STATE.token || "",
-    ...payload
-  });
-  const res = await fetch(API_URL + "?" + params.toString(), {
+  const url = new URL(API_URL);
+  url.searchParams.set("action", action);
+  url.searchParams.set("token", STATE.token || "");
+  url.searchParams.set("payload", JSON.stringify(payload));
+  
+  const res = await fetch(url.toString(), {
     method: "GET",
     redirect: "follow"
   });

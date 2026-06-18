@@ -144,14 +144,24 @@ const STATUS_COLOR = {
   "ส่งเล่มสมบูรณ์":"var(--violet)","รอการประเมิน":"var(--amber)",
   "ปิดโครงการ":"var(--green)","ยุติโครงการ":"var(--grey)","รอคืนเงิน":"var(--red)"
 };
-const HEALTH_COLOR = {"ปกติ":"var(--green)","ใกล้กำหนด":"var(--amber)","ล่าช้า":"var(--red)","เสร็จสิ้น":"var(--grey)"};
+// เพิ่ม "แจ้งเตือนแล้ว" ใน health
+const HEALTH_COLOR = {"ปกติ":"var(--green)","ใกล้กำหนด":"var(--amber)","ล่าช้า":"var(--red)","เสร็จสิ้น":"var(--grey)","แจ้งเตือนแล้ว":"var(--blue)"};
 const statusBadge = s => `<span class="badge" style="background:${STATUS_COLOR[s]||'var(--grey)'}">${esc(s)}</span>`;
 const healthBadge = h => `<span class="pill" style="color:${HEALTH_COLOR[h]||'var(--grey)'};border-color:${HEALTH_COLOR[h]||'var(--grey)'}">${esc(h)}</span>`;
 const kpi = (v,l,c) => `<div class="card kpi"><div class="v" style="color:${c||'var(--ink)'}">${v}</div><div class="l">${l}</div></div>`;
 const loading = () => `<div class="loading"><div class="spinner"></div>กำลังโหลด...</div>`;
 
+// ======== CACHE (ลด GAS cold-start) ========
+const CACHE_TTL = 60000; // 60 วินาที
+let _cache = {};
+function cacheGet(k){ const c=_cache[k]; return (c && Date.now()-c.t < CACHE_TTL) ? c.v : null; }
+function cacheSet(k,v){ _cache[k]={v,t:Date.now()}; }
+function cacheClear(){ _cache={}; }
+
 // ======== API ========
-async function api(action, payload={}) {
+async function api(action, payload={}, useCache=false) {
+  const cacheKey = action + JSON.stringify(payload);
+  if(useCache){ const hit = cacheGet(cacheKey); if(hit) return hit; }
   const url = new URL(API_URL);
   url.searchParams.set("action", action);
   url.searchParams.set("token", S.token||"");
@@ -159,6 +169,7 @@ async function api(action, payload={}) {
   const res = await fetch(url.toString(), { method:"GET", redirect:"follow" });
   const data = await res.json();
   if(data.ok===false && data.error==="unauthorized"){ logout(); throw new Error("เซสชันหมดอายุ"); }
+  if(useCache && data.ok) cacheSet(cacheKey, data);
   return data;
 }
 
@@ -222,32 +233,35 @@ function go(page){
   render();
 }
 
-// ======== DATA LOADING (แยกออกจาก render เพื่อความเร็ว) ========
-async function loadData(){
-  // โหลด 3 อันพร้อมกัน
-  try {
-    const [pr, bg, du] = await Promise.all([
-      api("listProjects"),
-      api("listBudget"),
-      api("dueSoon")
-    ]);
-    S.projects = pr.data||[];
-    S.budget   = bg.data||[];
-    S.due      = du.data||[];
-  } catch(e){ console.error("loadData error", e); }
+// ======== DATA LOADING ========
+async function loadData(forceRefresh=false){
+  if(forceRefresh) cacheClear();
 
-  // โหลด users แยก (เฉพาะ admin)
-  if(S.user.role==="admin"){
-    try { S.users = (await api("listUsers")).data||[]; } catch(e){}
+  // โหลด projects ก่อนเพราะสำคัญสุด — render ทันทีเมื่อได้
+  const cachedProjects = !forceRefresh ? cacheGet("listProjects{}") : null;
+  if(cachedProjects){ S.projects = cachedProjects.data||[]; buildNav(); render(); }
+
+  // ยิง 3 requests พร้อมกัน
+  const prP  = api("listProjects", {}, !forceRefresh);
+  const bgP  = api("listBudget",   {}, !forceRefresh);
+  const duP  = api("dueSoon",      {}, false); // due soon ไม่ cache (ต้องสด)
+
+  // รอทีละอันแล้ว render ทันที
+  prP.then(pr=>{ S.projects=pr.data||[]; buildNav(); render(); }).catch(console.error);
+  bgP.then(bg=>{ S.budget=bg.data||[]; if(S.page==="budget"||S.page==="overview") render(); }).catch(console.error);
+  duP.then(du=>{ S.due=du.data||[]; buildNav(); if(S.page==="reminders") render(); }).catch(console.error);
+
+  // รอทั้งหมดเสร็จ
+  await Promise.allSettled([prP, bgP, duP]);
+
+  // โหลด users เฉพาะ admin + reviewer (reviewer ต้องการดึง reviewer list)
+  if(["admin","staff"].includes(S.user.role)){
+    try { const ru=await api("listUsers",{},!forceRefresh); S.users=ru.data||[]; if(S.page==="users") render(); } catch(e){}
   }
-
-  // อัปเดต nav badge + re-render หน้าปัจจุบัน
-  buildNav();
-  render();
+  buildNav(); render();
 }
 
-// refresh = โหลดใหม่ทั้งหมด (ใช้หลัง write action)
-async function refresh(){ await loadData(); }
+async function refresh(){ await loadData(true); }
 
 // ======== RENDER ========
 const PAGE_TITLE = {
@@ -396,39 +410,7 @@ function showTrackModal(projectId, projectTitle){
   </div>`);
 }
 
-async function saveTracking(projectId){
-  const btn   = document.getElementById("saveTrackBtn");
-  const errEl = document.getElementById("trackErr");
-  errEl.textContent = "";
-  const date    = document.getElementById("tr_date").value;
-  const channel = document.getElementById("tr_channel").value;
-  const note    = document.getElementById("tr_note").value.trim();
-  const status  = document.getElementById("tr_status").value;
-  if(!date)   { errEl.textContent="กรุณาเลือกวันที่"; return; }
-  if(!channel){ errEl.textContent="กรุณาเลือกช่องทาง"; return; }
-  btn.classList.add("saving"); btn.textContent="กำลังบันทึก...";
-  try {
-    const channelLabel = {"email":"อีเมล","phone":"โทรศัพท์","line":"Line","meeting":"ประชุม","letter":"หนังสือราชการ","other":"อื่น ๆ"}[channel]||channel;
-    const r = await api("sendReminder",{
-      projectId,
-      trackDate: date,
-      trackChannel: channelLabel,
-      trackNote: note,
-      trackStatus: status,
-      manualTrack: true
-    });
-    // บันทึก reminder ใน sheet เสมอ แม้ส่งอีเมลไม่ได้ก็ตาม
-    closeModal();
-    alert(`บันทึกการติดตามแล้ว\nวันที่: ${date} | ช่องทาง: ${channelLabel}`);
-  } catch(e){
-    // fallback: บันทึกใน sheet โดยตรง
-    try {
-      await api("logReminder",{projectId, channel, note, date, status});
-    } catch(_){}
-    closeModal();
-    alert("บันทึกการติดตามแล้ว (เฉพาะ log)");
-  }
-}
+// (saveTracking อยู่ด้านบนแล้ว)
 
 function viewEvals(v){
   const list = S.projects.filter(p=>p.reviewers&&p.reviewers.length);
@@ -544,10 +526,18 @@ function showUserModal(existing){
       <button class="btn ghost" style="padding:6px 12px" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body">
-      <div class="field"><label>บทบาท *</label>
-        <select id="u_role" onchange="updateAutoId(this)">
-          ${roles.map(r=>`<option value="${r.v}" data-label="${r.l}"${(u.role||"staff")===r.v?" selected":""}>${r.l}</option>`).join("")}
-        </select>
+      <div class="field-row">
+        <div>
+          <label>รหัสผู้ใช้ (ID) *</label>
+          <input id="u_id" value="${esc(u.id||"")}" placeholder="เช่น dean01, rev_malee"
+            ${isEdit?"readonly style='background:var(--ivory);color:var(--muted)'":''}/>
+          ${isEdit?"":`<p style="font-size:11px;color:var(--muted);margin:3px 0 0">ใช้สำหรับ login — ตั้งได้อิสระ ไม่มีช่องว่าง</p>`}
+        </div>
+        <div><label>บทบาท *</label>
+          <select id="u_role">
+            ${roles.map(r=>`<option value="${r.v}" data-label="${r.l}"${(u.role||"staff")===r.v?" selected":""}>${r.l}</option>`).join("")}
+          </select>
+        </div>
       </div>
       <div class="field"><label>ชื่อ-นามสกุล *</label>
         <input id="u_name" value="${esc(u.name||"")}" placeholder="ชื่อ นามสกุล"/>
@@ -562,11 +552,9 @@ function showUserModal(existing){
       </div>
       <div class="field">
         <label>${isEdit?"รหัสผ่านใหม่ (เว้นว่างถ้าไม่เปลี่ยน)":"รหัสผ่าน *"}</label>
-        <input id="u_pwd" type="password" placeholder="${isEdit?"เว้นว่างถ้าไม่เปลี่ยน":"ตั้งรหัสผ่านเริ่มต้น"}"/>
+        <input id="u_pwd" type="password" placeholder="${isEdit?"เว้นว่างถ้าไม่เปลี่ยน":"ตั้งรหัสผ่าน"}"/>
       </div>
-      ${isEdit
-        ? `<div class="note" style="margin:4px 0 0">รหัสผู้ใช้: <b>${esc(u.id)}</b></div>`
-        : `<div class="note" style="margin:4px 0 0">รหัสผู้ใช้จะถูกสร้างอัตโนมัติเมื่อบันทึก</div>`}
+      ${isEdit?`<div class="note" style="margin:4px 0 0">รหัสผู้ใช้: <b>${esc(u.id)}</b> (เปลี่ยนไม่ได้)</div>`:""}
     </div>
     <div class="modal-footer">
       <div id="userErr" style="color:var(--red);font-size:12px;margin-right:auto;align-self:center"></div>
@@ -579,8 +567,54 @@ function showUserModal(existing){
 async function sendReminder(id){
   if(!confirm("ส่งอีเมลแจ้งเตือนไปยังผู้ขอทุน?")) return;
   const r = await api("sendReminder",{projectId:id});
-  if(r.ok){ showToast("ส่งอีเมลแล้ว"); }
-  else alert("ส่งไม่สำเร็จ: "+(r.error||""));
+  if(r.ok){
+    // 5. อัปเดต health ใน local state ทันที
+    const p = S.projects.find(x=>x.id===id);
+    if(p) p.health = "แจ้งเตือนแล้ว";
+    // อัปเดต due list
+    S.due = S.due.filter(d=>d.id!==id);
+    buildNav(); render();
+    showToast("ส่งอีเมลแล้ว — สถานะเปลี่ยนเป็น 'แจ้งเตือนแล้ว'");
+  } else alert("ส่งไม่สำเร็จ: "+(r.error||""));
+}
+
+// 6. แก้ saveTracking ให้ส่ง channel และ note ถูกต้อง
+async function saveTracking(projectId){
+  const btn   = document.getElementById("saveTrackBtn");
+  const errEl = document.getElementById("trackErr");
+  errEl.textContent = "";
+  const date    = document.getElementById("tr_date").value;
+  const channel = document.getElementById("tr_channel").value;
+  const note    = document.getElementById("tr_note").value.trim();
+  const status  = document.getElementById("tr_status").value;
+  if(!date){ errEl.textContent="กรุณาเลือกวันที่"; return; }
+  btn.classList.add("saving"); btn.textContent="กำลังบันทึก...";
+
+  const CHANNEL_LABEL = {"email":"อีเมล","phone":"โทรศัพท์","line":"Line","meeting":"ประชุม","letter":"หนังสือราชการ","other":"อื่น ๆ"};
+  const channelLabel = CHANNEL_LABEL[channel]||channel;
+  const STATUS_LABEL = {"contacted":"ติดต่อได้แล้ว","no_response":"ยังไม่ได้รับการตอบกลับ","scheduled":"นัดหมายเรียบร้อย","escalated":"ส่งเรื่องต่อผู้บังคับบัญชา"};
+  const statusLabel  = STATUS_LABEL[status]||status;
+
+  try {
+    // บันทึก reminder พร้อม channel และ note ที่ถูกต้อง
+    const r = await api("logReminder",{
+      projectId,
+      channel: channelLabel,   // บันทึกค่าภาษาไทยเพื่อให้ sheet อ่านได้ถูก
+      note,
+      date,
+      trackStatus: statusLabel
+    });
+    // อัปเดต health ใน local state
+    const p = S.projects.find(x=>x.id===projectId);
+    if(p) p.health = "แจ้งเตือนแล้ว";
+    S.due = S.due.filter(d=>d.id!==projectId);
+    buildNav(); render();
+    closeModal();
+    showToast(`บันทึกการติดตาม "${channelLabel}" แล้ว`);
+  } catch(e){
+    btn.classList.remove("saving"); btn.textContent="บันทึกการติดตาม";
+    errEl.textContent = e.message;
+  }
 }
 
 async function saveUser(existingId){
@@ -588,16 +622,19 @@ async function saveUser(existingId){
   const errEl = document.getElementById("userErr");
   if(!btn || !errEl) return;
   errEl.textContent = "";
-  const name  = document.getElementById("u_name").value.trim();
-  const role  = document.getElementById("u_role").value;
-  const phone = document.getElementById("u_phone").value.trim();
-  const email = document.getElementById("u_email").value.trim();
-  const pwd   = document.getElementById("u_pwd").value;
-  const sel   = document.getElementById("u_role");
+  const idInput   = document.getElementById("u_id");
+  const id        = existingId || (idInput ? idInput.value.trim() : "");
+  const name      = document.getElementById("u_name").value.trim();
+  const role      = document.getElementById("u_role").value;
+  const phone     = document.getElementById("u_phone").value.trim();
+  const email     = document.getElementById("u_email").value.trim();
+  const pwd       = document.getElementById("u_pwd").value;
+  const sel       = document.getElementById("u_role");
   const roleLabel = sel.options[sel.selectedIndex].dataset.label || role;
-  const id = existingId || genUserId(role);
 
-  if(!name){ errEl.textContent="กรุณากรอกชื่อ-นามสกุล"; return; }
+  if(!id)   { errEl.textContent="กรุณากรอกรหัสผู้ใช้ (ID)"; return; }
+  if(id.includes(" ")){ errEl.textContent="รหัสผู้ใช้ต้องไม่มีช่องว่าง"; return; }
+  if(!name) { errEl.textContent="กรุณากรอกชื่อ-นามสกุล"; return; }
   if(!existingId && !pwd){ errEl.textContent="กรุณากรอกรหัสผ่าน"; return; }
 
   const payload = { id, name, role, roleLabel, phone, email };
@@ -1026,11 +1063,9 @@ function showAddProject(existing){
         <div><label>วงเงินรวม (บาท) *</label>
           <input id="f_total" type="number" value="${p.total||""}" placeholder="500000"/></div>
       </div>
-      <div class="field-row">
-        <div><label>คณะ/หน่วยงาน</label>
-          <input id="f_dept" value="${esc(p.dept||"")}" placeholder="คณะวิทยาศาสตร์"/></div>
-        <div><label>สถานะ</label>
-          <select id="f_status">${statuses.map(s=>`<option value="${s}"${(p.status||"ทำสัญญาแล้ว")===s?" selected":""}>${s}</option>`).join("")}</select></div>
+      <div class="field">
+        <label>สถานะ</label>
+        <select id="f_status">${statuses.map(s=>`<option value="${s}"${(p.status||"ทำสัญญาแล้ว")===s?" selected":""}>${s}</option>`).join("")}</select>
       </div>
 
       <div class="section-label">หัวหน้าโครงการ</div>
@@ -1061,8 +1096,23 @@ function showAddProject(existing){
         </div>`).join("")}
 
       <div class="section-label">ผู้ประเมิน (สูงสุด 3 ท่าน)</div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px">เลือกจากรายชื่อผู้ใช้งาน role "reviewer" หรือพิมพ์ชื่อเองหากยังไม่มีบัญชี</p>
       <div id="reviewerList">${renderReviewerFields(revs)}</div>
       <button class="btn ghost" style="width:100%;margin-top:4px" onclick="addReviewerField()" id="addRevBtn">+ เพิ่มผู้ประเมิน</button>
+
+      <div class="section-label">📎 แนบเอกสาร</div>
+      <div style="background:var(--ivory);border:1px dashed var(--line);border-radius:10px;padding:14px;text-align:center">
+        <input type="file" id="f_files" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"
+          style="display:none" onchange="previewFiles(this)"/>
+        <button class="btn ghost" onclick="document.getElementById('f_files').click()" type="button">
+          📂 เลือกไฟล์
+        </button>
+        <p style="font-size:12px;color:var(--muted);margin:8px 0 0">
+          รองรับ: PDF, Word, Excel, JPG, PNG · สูงสุด <b>5 ไฟล์</b> · ขนาดรวมไม่เกิน <b>25 MB</b><br>
+          <span style="color:var(--amber)">⚠️ ไฟล์จะถูกอัปโหลดไปยัง Google Drive โดยตรง ต้องตั้งค่า Drive Folder ID ใน Config sheet ก่อน</span>
+        </p>
+        <div id="filePreview" style="margin-top:10px;text-align:left"></div>
+      </div>
 
     </div>
     <div class="modal-footer">
@@ -1074,26 +1124,81 @@ function showAddProject(existing){
 }
 
 function renderReviewerFields(revs){
+  // ดึงรายชื่อ reviewer จาก S.users
+  const reviewerUsers = S.users.filter(u=>u.role==="reviewer");
+  const opts = reviewerUsers.map(u=>`<option value="${esc(u.name)}" data-phone="${esc(u.phone||"")}" data-email="${esc(u.email||"")}">${esc(u.name)}</option>`).join("");
+
   return revs.map((r,i)=>`
     <div class="reviewer-card" id="rev_${i}">
       <div class="rc-head">ผู้ประเมินท่านที่ ${i+1}
         <button class="btn-icon" onclick="removeReviewer(${i})">✕ ลบ</button>
       </div>
+      ${reviewerUsers.length ? `
+      <div class="field" style="margin-bottom:8px">
+        <label>เลือกจากรายชื่อ</label>
+        <select onchange="fillReviewerFromUser(this,${i})" style="margin-bottom:6px">
+          <option value="">— เลือก reviewer หรือพิมพ์ด้านล่าง —</option>
+          ${opts}
+        </select>
+      </div>` : ""}
       <div class="field-row3">
         <div style="grid-column:span 3"><label>ชื่อ-นามสกุล</label>
-          <input class="rv-name" value="${esc(r.name||"")}" placeholder="ศ.ดร. ชื่อ นามสกุล"/></div>
-        <div><label>เบอร์โทร</label><input class="rv-phone" value="${esc(r.phone||"")}" placeholder="081-000-0000"/></div>
-        <div style="grid-column:span 2"><label>อีเมล</label><input class="rv-email" value="${esc(r.email||"")}" placeholder="name@univ.ac.th"/></div>
+          <input class="rv-name" id="rv_name_${i}" value="${esc(r.name||"")}" placeholder="ศ.ดร. ชื่อ นามสกุล"/></div>
+        <div><label>เบอร์โทร</label><input class="rv-phone" id="rv_phone_${i}" value="${esc(r.phone||"")}" placeholder="081-000-0000"/></div>
+        <div style="grid-column:span 2"><label>อีเมล</label><input class="rv-email" id="rv_email_${i}" value="${esc(r.email||"")}" placeholder="name@univ.ac.th"/></div>
       </div>
     </div>`).join("");
+}
+
+function fillReviewerFromUser(sel, idx){
+  if(!sel.value) return;
+  const opt = sel.options[sel.selectedIndex];
+  const nameEl  = document.getElementById(`rv_name_${idx}`);
+  const phoneEl = document.getElementById(`rv_phone_${idx}`);
+  const emailEl = document.getElementById(`rv_email_${idx}`);
+  if(nameEl)  nameEl.value  = sel.value;
+  if(phoneEl) phoneEl.value = opt.dataset.phone || "";
+  if(emailEl) emailEl.value = opt.dataset.email || "";
+}
+
+function previewFiles(input){
+  const files = Array.from(input.files);
+  const MAX_FILES = 5;
+  const MAX_TOTAL_MB = 25;
+  const preview = document.getElementById("filePreview");
+  if(!preview) return;
+  if(files.length > MAX_FILES){
+    preview.innerHTML=`<p style="color:var(--red);font-size:12px">⚠️ เลือกได้สูงสุด ${MAX_FILES} ไฟล์ (เลือกมา ${files.length} ไฟล์)</p>`;
+    input.value=""; return;
+  }
+  const totalMB = files.reduce((s,f)=>s+f.size,0)/1024/1024;
+  if(totalMB > MAX_TOTAL_MB){
+    preview.innerHTML=`<p style="color:var(--red);font-size:12px">⚠️ ขนาดรวมเกิน ${MAX_TOTAL_MB} MB (${totalMB.toFixed(1)} MB)</p>`;
+    input.value=""; return;
+  }
+  preview.innerHTML = files.map(f=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:12px">
+      <span>📄 ${esc(f.name)}</span>
+      <span class="muted">${(f.size/1024/1024).toFixed(2)} MB</span>
+    </div>`).join("")+`<p style="font-size:11px;color:var(--muted);margin:6px 0 0">รวม ${totalMB.toFixed(2)} MB · ${files.length} ไฟล์ — ไฟล์จะถูกส่งพร้อมบันทึกโครงการ</p>`;
 }
 
 function addReviewerField(){
   const list = document.getElementById("reviewerList");
   const current = list.querySelectorAll(".reviewer-card").length;
   if(current >= 3){ alert("เพิ่มผู้ประเมินได้สูงสุด 3 ท่าน"); return; }
+  const html = renderReviewerFields([{name:"",phone:"",email:""}]);
+  // แทนที่ index 0 → index ปัจจุบัน
+  const adjusted = html
+    .replace(/id="rev_0"/g,`id="rev_${current}"`)
+    .replace(/removeReviewer\(0\)/g,`removeReviewer(${current})`)
+    .replace(/fillReviewerFromUser\(this,0\)/g,`fillReviewerFromUser(this,${current})`)
+    .replace(/id="rv_name_0"/g,`id="rv_name_${current}"`)
+    .replace(/id="rv_phone_0"/g,`id="rv_phone_${current}"`)
+    .replace(/id="rv_email_0"/g,`id="rv_email_${current}"`)
+    .replace("ท่านที่ 1",`ท่านที่ ${current+1}`);
   const div = document.createElement("div");
-  div.innerHTML = renderReviewerFields([{name:"",phone:"",email:""}]).replace('id="rev_0"',`id="rev_${current}"`).replace("removeReviewer(0)",`removeReviewer(${current})`).replace("ท่านที่ 1",`ท่านที่ ${current+1}`);
+  div.innerHTML = adjusted;
   list.appendChild(div.firstElementChild);
   if(list.querySelectorAll(".reviewer-card").length >= 3)
     document.getElementById("addRevBtn").style.display="none";
@@ -1124,7 +1229,6 @@ async function saveProject(existingId){
   const duration = Number(document.getElementById("f_duration").value);
   const contract = document.getElementById("f_contract").value;
   const total    = Number(document.getElementById("f_total").value);
-  const dept     = document.getElementById("f_dept").value.trim();
   const status   = document.getElementById("f_status").value;
   const piPhone  = document.getElementById("f_phone").value.trim();
   const piEmail  = document.getElementById("f_email").value.trim();
@@ -1143,18 +1247,21 @@ async function saveProject(existingId){
     paidDate: document.getElementById(`f_inst${idx}_date`).value||""
   }));
 
-  // Reviewers
+  // Reviewers — อ่านจาก id ที่กำหนดใหม่
   const reviewers = [];
-  document.querySelectorAll(".reviewer-card").forEach(card=>{
-    const name = card.querySelector(".rv-name").value.trim();
+  document.querySelectorAll(".reviewer-card").forEach((card,i)=>{
+    const nameEl  = document.getElementById(`rv_name_${i}`)  || card.querySelector(".rv-name");
+    const phoneEl = document.getElementById(`rv_phone_${i}`) || card.querySelector(".rv-phone");
+    const emailEl = document.getElementById(`rv_email_${i}`) || card.querySelector(".rv-email");
+    const name = nameEl ? nameEl.value.trim() : "";
     if(name) reviewers.push({
       name, status:"รอประเมิน",
-      phone: card.querySelector(".rv-phone").value.trim(),
-      email: card.querySelector(".rv-email").value.trim()
+      phone: phoneEl ? phoneEl.value.trim() : "",
+      email: emailEl ? emailEl.value.trim() : ""
     });
   });
 
-  const payload = { title, pi, piPhone, piEmail, dept, budgetYear:year,
+  const payload = { title, pi, piPhone, piEmail, dept:"", budgetYear:year,
     total, contractDate:contract, durationMonths:duration, status, installments, reviewers };
   if(existingId) payload.id = existingId;
 

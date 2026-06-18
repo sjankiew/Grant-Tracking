@@ -335,48 +335,316 @@ function viewBudget(v){
 function viewReminders(v){
   if(!S.due.length){ v.innerHTML=`<div class="card"><p class="muted">ไม่มีรายการใกล้กำหนด/ล่าช้า</p></div>`; return; }
   v.innerHTML = `<div class="card"><table><thead><tr>
-    <th>รหัส</th><th>โครงการ</th><th>รายการ</th><th>กำหนด</th><th>เหลือ</th><th></th>
+    <th>รหัส</th><th>โครงการ</th><th>รายการ</th><th>กำหนด</th><th>สุขภาพ</th><th>การดำเนินการ</th>
   </tr></thead><tbody>${S.due.map(d=>`
     <tr>
-      <td><b>${esc(d.id)}</b></td><td>${esc(d.title)}</td><td>${esc(d.label)}</td>
-      <td>${fmtDate(d.dueDate)}</td>
-      <td>${healthBadge(d.health)} ${d.daysLeft} วัน</td>
-      <td><button class="btn amber" onclick="sendReminder('${d.id}')">ส่งอีเมลเตือน</button></td>
+      <td><b>${esc(d.id)}</b></td>
+      <td style="max-width:180px">${esc(d.title)}</td>
+      <td style="font-size:12px;color:var(--muted)">${esc(d.label)}</td>
+      <td style="white-space:nowrap">${fmtDate(d.dueDate)}<br><span class="muted" style="font-size:11px">${d.daysLeft<0?`เลย ${Math.abs(d.daysLeft)} วัน`:`เหลือ ${d.daysLeft} วัน`}</span></td>
+      <td>${healthBadge(d.health)}</td>
+      <td style="white-space:nowrap;display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px">
+        <button class="btn amber" style="font-size:12px;padding:6px 10px" onclick="sendReminder('${d.id}')">📧 ส่งอีเมล</button>
+        <button class="btn ghost" style="font-size:12px;padding:6px 10px" onclick="showTrackModal('${d.id}','${esc(d.title).replace(/'/g,"\\'")}')">📋 บันทึกติดตาม</button>
+      </td>
     </tr>`).join("")}</tbody></table></div>`;
 }
 
-async function sendReminder(id){
-  if(!confirm("ส่งอีเมลแจ้งเตือนไปยังผู้ขอทุน?")) return;
-  const r = await api("sendReminder",{projectId:id});
-  alert(r.ok ? "ส่งอีเมลแล้ว" : "ส่งไม่สำเร็จ: "+(r.error||""));
+function showTrackModal(projectId, projectTitle){
+  const today = new Date().toISOString().slice(0,10);
+  openModal(`<div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h2>📋 บันทึกการติดตาม</h2>
+      <button class="btn ghost" style="padding:6px 12px" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--ivory);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px">
+        <b>${esc(projectId)}</b> — ${esc(projectTitle)}
+      </div>
+      <div class="field-row">
+        <div><label>วันที่ติดตาม *</label>
+          <input id="tr_date" type="date" value="${today}"/>
+        </div>
+        <div><label>ช่องทางการติดตาม *</label>
+          <select id="tr_channel">
+            <option value="email">อีเมล</option>
+            <option value="phone">โทรศัพท์</option>
+            <option value="line">Line</option>
+            <option value="meeting">ประชุม</option>
+            <option value="letter">หนังสือราชการ</option>
+            <option value="other">อื่น ๆ</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>หมายเหตุ / รายละเอียดการติดตาม</label>
+        <textarea id="tr_note" rows="4" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;resize:vertical" placeholder="เช่น ติดต่อ ดร.ชื่อ ทาง LINE แล้ว รอส่งรายงานภายใน 7 วัน"></textarea>
+      </div>
+      <div class="field"><label>สถานะการติดตาม</label>
+        <select id="tr_status">
+          <option value="contacted">ติดต่อได้แล้ว</option>
+          <option value="no_response">ยังไม่ได้รับการตอบกลับ</option>
+          <option value="scheduled">นัดหมายเรียบร้อย</option>
+          <option value="escalated">ส่งเรื่องต่อผู้บังคับบัญชา</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div id="trackErr" style="color:var(--red);font-size:12px;margin-right:auto;align-self:center"></div>
+      <button class="btn ghost" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn" id="saveTrackBtn" onclick="saveTracking('${projectId}')">บันทึกการติดตาม</button>
+    </div>
+  </div>`);
+}
+
+async function saveTracking(projectId){
+  const btn   = document.getElementById("saveTrackBtn");
+  const errEl = document.getElementById("trackErr");
+  errEl.textContent = "";
+  const date    = document.getElementById("tr_date").value;
+  const channel = document.getElementById("tr_channel").value;
+  const note    = document.getElementById("tr_note").value.trim();
+  const status  = document.getElementById("tr_status").value;
+  if(!date)   { errEl.textContent="กรุณาเลือกวันที่"; return; }
+  if(!channel){ errEl.textContent="กรุณาเลือกช่องทาง"; return; }
+  btn.classList.add("saving"); btn.textContent="กำลังบันทึก...";
+  try {
+    const channelLabel = {"email":"อีเมล","phone":"โทรศัพท์","line":"Line","meeting":"ประชุม","letter":"หนังสือราชการ","other":"อื่น ๆ"}[channel]||channel;
+    const r = await api("sendReminder",{
+      projectId,
+      trackDate: date,
+      trackChannel: channelLabel,
+      trackNote: note,
+      trackStatus: status,
+      manualTrack: true
+    });
+    // บันทึก reminder ใน sheet เสมอ แม้ส่งอีเมลไม่ได้ก็ตาม
+    closeModal();
+    alert(`บันทึกการติดตามแล้ว\nวันที่: ${date} | ช่องทาง: ${channelLabel}`);
+  } catch(e){
+    // fallback: บันทึกใน sheet โดยตรง
+    try {
+      await api("logReminder",{projectId, channel, note, date, status});
+    } catch(_){}
+    closeModal();
+    alert("บันทึกการติดตามแล้ว (เฉพาะ log)");
+  }
 }
 
 function viewEvals(v){
   const list = S.projects.filter(p=>p.reviewers&&p.reviewers.length);
   if(!list.length){ v.innerHTML=`<div class="card"><p class="muted">ยังไม่มีโครงการที่อยู่ระหว่างประเมิน</p></div>`; return; }
-  v.innerHTML = list.map(p=>`
+  v.innerHTML = list.map(p=>{
+    const allDone   = p.reviewers.every(r=>r.status==="ประเมินแล้ว");
+    const allPassed = p.reviewers.every(r=>r.result==="ผ่าน");
+    const anyRevise = p.reviewers.some(r=>r.result==="ให้แก้ไข");
+    const canClose  = allDone && allPassed && p.status==="รอการประเมิน";
+    const canUpdate = ["admin","staff"].includes(S.user.role);
+    return `
     <div class="card" style="margin-bottom:12px">
-      <b>${esc(p.id)}</b> — ${esc(p.title)} ${statusBadge(p.status)}
-      <table style="margin-top:8px"><thead><tr>
-        <th>ผู้ประเมิน</th><th>สถานะ</th><th>ผล</th><th>หมายเหตุ</th>
+      <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <div>
+          <span style="font-weight:700">${esc(p.id)}</span>
+          <span style="margin:0 6px;color:var(--muted)">—</span>
+          <span>${esc(p.title)}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${statusBadge(p.status)}
+          ${canUpdate && canClose ? `<button class="btn green" style="padding:5px 14px;font-size:12px" onclick="closeProjectAfterEval('${p.id}')">✓ ปิดโครงการ</button>` : ""}
+          ${canUpdate && anyRevise && p.status==="รอการประเมิน" ? `<button class="btn amber" style="padding:5px 14px;font-size:12px" onclick="setRevisionDeadline('${p.id}')">✎ กำหนดวันแก้ไข</button>` : ""}
+        </div>
+      </div>
+      ${allDone && allPassed ? `<div style="background:#F0FFF6;border:1px solid var(--green);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--green);margin-bottom:10px">✓ ผู้ประเมินทุกท่านให้ผ่านแล้ว${canClose?" — กดปุ่ม 'ปิดโครงการ' เพื่อดำเนินการต่อ":""}</div>` : ""}
+      ${anyRevise ? `<div style="background:#FFFBF0;border:1px solid var(--amber);border-radius:8px;padding:8px 12px;font-size:12px;color:#7a5b12;margin-bottom:10px">⚠️ มีผู้ประเมินให้แก้ไข — กรุณากำหนดวันครบกำหนดส่งฉบับแก้ไข</div>` : ""}
+      <table><thead><tr>
+        <th>ผู้ประเมิน</th><th>สถานะ</th><th>ผล</th><th>หมายเหตุ</th><th>วันที่</th>
       </tr></thead><tbody>${p.reviewers.map(r=>`
         <tr>
-          <td>${esc(r.name)}</td><td>${esc(r.status)}</td>
+          <td><div style="font-weight:600">${esc(r.name)}</div><div class="muted" style="font-size:11px">${esc(r.email||'')}</div></td>
+          <td>${r.status==="ประเมินแล้ว"?`<span class="pill" style="color:var(--green);border-color:var(--green)">✓ ประเมินแล้ว</span>`:`<span class="pill" style="color:var(--amber);border-color:var(--amber)">⏳ รอประเมิน</span>`}</td>
           <td>${r.result?`<span class="pill" style="color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'};border-color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'}">${esc(r.result)}</span>`:'—'}</td>
-          <td class="muted">${esc(r.note||'—')}</td>
+          <td class="muted" style="font-size:12px">${esc(r.note||'—')}</td>
+          <td class="muted" style="font-size:12px">${fmtDate(r.date)}</td>
         </tr>`).join("")}</tbody></table>
-    </div>`).join("");
+    </div>`;
+  }).join("");
+}
+
+async function closeProjectAfterEval(projectId){
+  if(!confirm(`ยืนยันเปลี่ยนสถานะ "${projectId}" เป็น "ปิดโครงการ" ?`)) return;
+  const p = S.projects.find(x=>x.id===projectId);
+  if(!p) return;
+  const payload = Object.assign({}, p, {
+    id: p.id, status: "ปิดโครงการ",
+    pi: p.pi, piPhone: p.piPhone, piEmail: p.piEmail,
+    _note: "ผู้ประเมินทุกท่านให้ผ่าน", _by: S.user.id
+  });
+  const r = await api("updateProject", payload);
+  if(r.ok){ await refresh(); alert("เปลี่ยนสถานะเป็น ปิดโครงการ แล้ว"); }
+  else alert("ไม่สำเร็จ: "+(r.error||""));
+}
+
+function setRevisionDeadline(projectId){
+  const deadline = prompt("กำหนดวันครบกำหนดส่งฉบับแก้ไข (YYYY-MM-DD):\nเช่น 2026-07-18");
+  if(!deadline) return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(deadline)){ alert("รูปแบบวันที่ไม่ถูกต้อง"); return; }
+  const p = S.projects.find(x=>x.id===projectId);
+  if(!p) return;
+  const payload = Object.assign({}, p, {
+    id: p.id, pi: p.pi, piPhone: p.piPhone, piEmail: p.piEmail,
+    revisionDeadline: deadline, _by: S.user.id
+  });
+  api("updateProject", payload).then(r=>{
+    if(r.ok){ refresh(); } else alert("ไม่สำเร็จ: "+(r.error||""));
+  });
 }
 
 function viewUsers(v){
+  document.getElementById("pageActions").innerHTML =
+    `<button class="btn" onclick="showUserModal()">+ เพิ่มผู้ใช้งาน</button>`;
   if(!S.users.length){ v.innerHTML=loading(); return; }
+  const ROLE_COLOR = {admin:"var(--oxblood)",staff:"var(--blue)",dean:"var(--violet)",reviewer:"var(--green)"};
   v.innerHTML = `<div class="card"><table><thead><tr>
-    <th>รหัสผู้ใช้</th><th>ชื่อ</th><th>บทบาท</th><th>อีเมล</th><th>โทร</th>
+    <th>รหัสผู้ใช้</th><th>ชื่อ</th><th>บทบาท</th><th>อีเมล</th><th>โทร</th><th style="width:120px"></th>
   </tr></thead><tbody>${S.users.map(u=>`
     <tr>
-      <td><b>${esc(u.id)}</b></td><td>${esc(u.name)}</td><td>${esc(u.roleLabel)}</td>
-      <td>${esc(u.email)}</td><td>${esc(u.phone)}</td>
+      <td><b>${esc(u.id)}</b></td>
+      <td>${esc(u.name)}</td>
+      <td><span class="badge" style="background:${ROLE_COLOR[u.role]||'var(--grey)'}">${esc(u.roleLabel)}</span></td>
+      <td><a href="mailto:${esc(u.email)}">${esc(u.email)}</a></td>
+      <td>${esc(u.phone)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn ghost" style="padding:5px 10px;font-size:12px;margin-right:4px"
+          onclick='showUserModal(${JSON.stringify(u)})'>✎</button>
+        <button class="btn danger" style="padding:5px 10px;font-size:12px"
+          onclick="deleteUser('${u.id}','${esc(u.name)}')">✕</button>
+      </td>
     </tr>`).join("")}</tbody></table></div>`;
+}
+
+// ======== MODAL: เพิ่ม/แก้ไข ผู้ใช้งาน ========
+// สร้าง user_id อัตโนมัติจากบทบาท + timestamp
+function genUserId(role){
+  const prefix = {admin:"adm",staff:"stf",dean:"dean",reviewer:"rev"}[role]||"usr";
+  return prefix + Date.now().toString().slice(-5);
+}
+function updateAutoId(sel){ /* id สร้างอัตโนมัติตอน save */ }
+
+function showUserModal(existing){
+  const u = existing || {};
+  const isEdit = !!u.id;
+  const roles = [
+    {v:"admin",l:"ผู้ดูแลระบบ"},
+    {v:"staff",l:"ทีมงาน/เจ้าหน้าที่"},
+    {v:"dean",l:"คณบดี"},
+    {v:"reviewer",l:"อาจารย์ผู้ประเมิน"}
+  ];
+  openModal(`<div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <h2>${isEdit?"✎ แก้ไขผู้ใช้งาน":"+ เพิ่มผู้ใช้งาน"}</h2>
+      <button class="btn ghost" style="padding:6px 12px" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>บทบาท *</label>
+        <select id="u_role" onchange="updateAutoId(this)">
+          ${roles.map(r=>`<option value="${r.v}" data-label="${r.l}"${(u.role||"staff")===r.v?" selected":""}>${r.l}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>ชื่อ-นามสกุล *</label>
+        <input id="u_name" value="${esc(u.name||"")}" placeholder="ชื่อ นามสกุล"/>
+      </div>
+      <div class="field-row">
+        <div><label>เบอร์โทร</label>
+          <input id="u_phone" value="${esc(u.phone||"")}" placeholder="081-234-5678"/>
+        </div>
+        <div><label>อีเมล</label>
+          <input id="u_email" type="email" value="${esc(u.email||"")}" placeholder="name@univ.ac.th"/>
+        </div>
+      </div>
+      <div class="field">
+        <label>${isEdit?"รหัสผ่านใหม่ (เว้นว่างถ้าไม่เปลี่ยน)":"รหัสผ่าน *"}</label>
+        <input id="u_pwd" type="password" placeholder="${isEdit?"เว้นว่างถ้าไม่เปลี่ยน":"ตั้งรหัสผ่านเริ่มต้น"}"/>
+      </div>
+      ${isEdit
+        ? `<div class="note" style="margin:4px 0 0">รหัสผู้ใช้: <b>${esc(u.id)}</b></div>`
+        : `<div class="note" style="margin:4px 0 0">รหัสผู้ใช้จะถูกสร้างอัตโนมัติเมื่อบันทึก</div>`}
+    </div>
+    <div class="modal-footer">
+      <div id="userErr" style="color:var(--red);font-size:12px;margin-right:auto;align-self:center"></div>
+      <button class="btn ghost" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn" id="saveUserBtn" onclick="saveUser('${u.id||""}')">${isEdit?"บันทึกการแก้ไข":"เพิ่มผู้ใช้งาน"}</button>
+    </div>
+  </div>`);
+}
+
+async function sendReminder(id){
+  if(!confirm("ส่งอีเมลแจ้งเตือนไปยังผู้ขอทุน?")) return;
+  const r = await api("sendReminder",{projectId:id});
+  if(r.ok){ showToast("ส่งอีเมลแล้ว"); }
+  else alert("ส่งไม่สำเร็จ: "+(r.error||""));
+}
+
+async function saveUser(existingId){
+  const btn   = document.getElementById("saveUserBtn");
+  const errEl = document.getElementById("userErr");
+  if(!btn || !errEl) return;
+  errEl.textContent = "";
+  const name  = document.getElementById("u_name").value.trim();
+  const role  = document.getElementById("u_role").value;
+  const phone = document.getElementById("u_phone").value.trim();
+  const email = document.getElementById("u_email").value.trim();
+  const pwd   = document.getElementById("u_pwd").value;
+  const sel   = document.getElementById("u_role");
+  const roleLabel = sel.options[sel.selectedIndex].dataset.label || role;
+  const id = existingId || genUserId(role);
+
+  if(!name){ errEl.textContent="กรุณากรอกชื่อ-นามสกุล"; return; }
+  if(!existingId && !pwd){ errEl.textContent="กรุณากรอกรหัสผ่าน"; return; }
+
+  const payload = { id, name, role, roleLabel, phone, email };
+  if(pwd) payload.password = pwd;
+
+  btn.classList.add("saving"); btn.textContent="กำลังบันทึก...";
+  try {
+    const r = await api("upsertUser", payload);
+    if(!r.ok){
+      errEl.textContent = r.error||"บันทึกไม่สำเร็จ";
+      btn.classList.remove("saving");
+      btn.textContent = existingId ? "บันทึกการแก้ไข" : "เพิ่มผู้ใช้งาน";
+      return;
+    }
+    closeModal();
+    // reload users แล้ว re-render ทันที
+    const ru = await api("listUsers");
+    S.users = ru.data || [];
+    viewUsers(document.getElementById("view"));
+    // แสดง toast
+    showToast(existingId ? `แก้ไขข้อมูล "${name}" แล้ว` : `เพิ่มผู้ใช้ "${name}" (${id}) แล้ว`);
+  } catch(e){
+    if(errEl) errEl.textContent = e.message;
+    btn.classList.remove("saving");
+    btn.textContent = existingId ? "บันทึกการแก้ไข" : "เพิ่มผู้ใช้งาน";
+  }
+}
+
+async function deleteUser(userId, userName){
+  if(userId === S.user.id){ alert("ไม่สามารถลบบัญชีของตัวเองได้"); return; }
+  if(!confirm(`ยืนยันลบผู้ใช้ "${userName}" (${userId}) ?\nการกระทำนี้ไม่สามารถย้อนกลับได้`)) return;
+  const r = await api("deleteUser",{userId});
+  if(r.ok){
+    const ru = await api("listUsers");
+    S.users = ru.data || [];
+    viewUsers(document.getElementById("view"));
+    showToast(`ลบผู้ใช้ "${userName}" แล้ว`);
+  } else alert("ลบไม่สำเร็จ: "+(r.error||""));
+}
+
+// Toast notification เบา ๆ
+function showToast(msg){
+  let t = document.getElementById("toast");
+  if(!t){ t=document.createElement("div"); t.id="toast"; t.style.cssText="position:fixed;bottom:24px;right:24px;background:#1F2933;color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;z-index:99;box-shadow:0 4px 16px rgba(0,0,0,.2);transition:opacity .3s"; document.body.appendChild(t); }
+  t.textContent = msg; t.style.opacity="1";
+  clearTimeout(t._t);
+  t._t = setTimeout(()=>{ t.style.opacity="0"; }, 3000);
 }
 
 function viewOverview(v){
@@ -404,11 +672,24 @@ function viewOverview(v){
         </div>`;}).join("")}
     </div>
     <div class="card">
-      <h3 style="margin-bottom:10px">สถานะโครงการ</h3>
-      ${Object.entries(byStatus).map(([s,n])=>`
-        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)">
-          ${statusBadge(s)}<b>${n}</b>
-        </div>`).join("")}
+      <h3 style="margin-bottom:16px">สถานะโครงการ</h3>
+      ${(()=>{
+        const total = P.length || 1;
+        const order = ["ทำสัญญาแล้ว","รายงานความก้าวหน้าครั้งที่ 1","ส่งเล่มสมบูรณ์","รอการประเมิน","ปิดโครงการ","ยุติโครงการ","รอคืนเงิน"];
+        const colors = {"ทำสัญญาแล้ว":"#2B5F8A","รายงานความก้าวหน้าครั้งที่ 1":"#2B5F8A","ส่งเล่มสมบูรณ์":"#5B4B8A","รอการประเมิน":"#C98A12","ปิดโครงการ":"#2E7D5B","ยุติโครงการ":"#6B7280","รอคืนเงิน":"#C0392B"};
+        return order.filter(s=>byStatus[s]).map(s=>{
+          const n=byStatus[s], pct=Math.round(n/total*100);
+          return `<div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+              <span style="font-size:13px">${statusBadge(s)}</span>
+              <span style="font-weight:700;font-size:15px;font-family:'Noto Serif Thai',serif">${n} <span style="font-size:11px;color:var(--muted);font-weight:400">โครงการ (${pct}%)</span></span>
+            </div>
+            <div style="height:10px;background:var(--line);border-radius:999px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${colors[s]||'var(--grey)'};border-radius:999px;transition:width .4s ease"></div>
+            </div>
+          </div>`;
+        }).join("");
+      })()}
     </div>`;
 }
 
@@ -417,17 +698,176 @@ function viewMyReviews(v){
   const tasks = [];
   S.projects.forEach(p=>(p.reviewers||[]).forEach(r=>{ if(r.name===me) tasks.push({p,r}); }));
   if(!tasks.length){ v.innerHTML=`<div class="card"><p class="muted">ยังไม่มีงานประเมินที่ได้รับมอบหมาย</p></div>`; return; }
-  v.innerHTML = tasks.map(({p,r})=>`
-    <div class="card" style="margin-bottom:12px">
-      <b>${esc(p.id)}</b> — ${esc(p.title)}<br>
-      <span class="muted">${esc(p.pi)} · ${esc(p.dept)}</span>
-      <div style="margin-top:10px">
-        ${r.status==="ประเมินแล้ว"
-          ? `ผลของคุณ: <span class="pill">${esc(r.result||'-')}</span> <span class="muted">${esc(r.note||'')}</span>`
-          : `<button class="btn green" style="margin-right:8px" onclick="submitReview('${p.id}','ผ่าน')">✓ ผ่าน</button>
-             <button class="btn amber" onclick="submitReview('${p.id}','ให้แก้ไข')">✎ ให้แก้ไข</button>`}
+
+  const pending = tasks.filter(t=>t.r.status!=="ประเมินแล้ว").length;
+  const done    = tasks.filter(t=>t.r.status==="ประเมินแล้ว").length;
+
+  v.innerHTML = `
+    <div class="grid kpis" style="margin-bottom:16px">
+      ${kpi(tasks.length,"งานประเมินทั้งหมด")}
+      ${kpi(pending,"รอประเมิน","var(--amber)")}
+      ${kpi(done,"ประเมินแล้ว","var(--green)")}
+    </div>
+    ${tasks.map(({p,r})=>`
+    <div class="card" style="margin-bottom:12px;cursor:pointer;transition:box-shadow .15s"
+      onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'"
+      onmouseout="this.style.boxShadow=''"
+      onclick="openReviewDrawer('${p.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:start">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;color:var(--oxblood)">${esc(p.id)}</div>
+          <div style="font-size:13px;margin:2px 0">${esc(p.title)}</div>
+          <div class="muted" style="font-size:12px">${esc(p.pi)} · ${esc(p.dept)}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:12px">
+          ${r.status==="ประเมินแล้ว"
+            ? `<span class="pill" style="color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'};border-color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'}">✓ ${esc(r.result)}</span>`
+            : `<span class="pill" style="color:var(--amber);border-color:var(--amber)">⏳ รอประเมิน</span>`}
+          <div class="muted" style="font-size:11px;margin-top:4px">คลิกเพื่อดูรายละเอียด →</div>
+        </div>
       </div>
-    </div>`).join("");
+      ${r.status==="ประเมินแล้ว" && r.note
+        ? `<div style="margin-top:8px;font-size:12px;color:var(--muted);background:var(--ivory);padding:6px 10px;border-radius:6px">หมายเหตุ: ${esc(r.note)}</div>`
+        : ""}
+    </div>`).join("")}`;
+}
+
+// Drawer สำหรับ reviewer — เห็นรายละเอียดโครงการ + ฟอร์มประเมิน
+function openReviewDrawer(projectId){
+  const p = S.projects.find(x=>x.id===projectId);
+  if(!p) return;
+  const me = S.user.name;
+  const myReview = (p.reviewers||[]).find(r=>r.name===me) || {};
+  const alreadyDone = myReview.status==="ประเมินแล้ว";
+
+  document.getElementById("drawer").innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+      <div style="flex:1;min-width:0">
+        <h2 style="font-size:17px;color:var(--oxblood);line-height:1.4">${esc(p.title)}</h2>
+        <span class="muted">${esc(p.id)} · ${esc(p.dept)}</span>
+      </div>
+      <button class="btn ghost" style="padding:7px 12px;font-size:13px;flex-shrink:0" onclick="closeDrawer()">✕ ปิด</button>
+    </div>
+    <div style="margin-top:10px">${statusBadge(p.status)} ${healthBadge(p.health)}</div>
+
+    <!-- ส่วนประเมิน (เด่นชัดขึ้นมาก่อน) -->
+    <div style="margin-top:18px;background:${alreadyDone?'#F0FFF6':'#FFFBF0'};border:2px solid ${alreadyDone?'var(--green)':'var(--amber)'};border-radius:12px;padding:16px">
+      <h3 style="font-size:14px;color:${alreadyDone?'var(--green)':'var(--oxblood)'};margin-bottom:12px">
+        ${alreadyDone?"✓ ผลการประเมินของคุณ":"📋 บันทึกผลการประเมิน"}
+      </h3>
+      ${alreadyDone ? `
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span class="badge" style="background:${myReview.result==='ผ่าน'?'var(--green)':'var(--amber)'}; font-size:14px;padding:6px 16px">
+            ${myReview.result==='ผ่าน'?'✓ ผ่าน':'✎ ให้แก้ไข'}
+          </span>
+          ${myReview.note?`<span style="color:var(--muted);font-size:13px">"${esc(myReview.note)}"</span>`:""}
+          <span style="color:var(--muted);font-size:12px">ประเมินเมื่อ ${fmtDate(myReview.date)}</span>
+        </div>
+        <button class="btn ghost" style="margin-top:12px;font-size:12px"
+          onclick="resetReviewForm('${p.id}')">✎ แก้ไขผลประเมิน</button>
+      ` : `
+        <div style="margin-bottom:10px">
+          <label>หมายเหตุ / ข้อเสนอแนะ</label>
+          <textarea id="rv_note" rows="3" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;resize:vertical" placeholder="ระบุข้อเสนอแนะ หรือเหตุผลที่ต้องแก้ไข (ถ้ามี)"></textarea>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn green" style="flex:1;padding:11px" onclick="doSubmitReview('${p.id}','ผ่าน')">
+            ✓ ผ่าน
+          </button>
+          <button class="btn amber" style="flex:1;padding:11px" onclick="doSubmitReview('${p.id}','ให้แก้ไข')">
+            ✎ ให้แก้ไข
+          </button>
+        </div>
+        <div id="rv_err" style="color:var(--red);font-size:12px;margin-top:6px"></div>
+      `}
+    </div>
+
+    <div class="sect"><h3>ข้อมูลหัวหน้าโครงการ</h3>
+      <div><b>${esc(p.pi)}</b></div>
+      <div class="muted">
+        <a href="tel:${esc(p.piPhone)}">${esc(p.piPhone)}</a> ·
+        <a href="mailto:${esc(p.piEmail)}">${esc(p.piEmail)}</a>
+      </div>
+      <div class="row2" style="margin-top:8px">
+        <div><label>ปีงบประมาณ</label>${p.budgetYear}</div>
+        <div><label>ระยะเวลา</label>${p.durationMonths} เดือน</div>
+        <div><label>วันทำสัญญา</label>${fmtDate(p.contractDate)}</div>
+        <div><label>วงเงินรวม</label>${fmtBaht(p.total)} ฿</div>
+      </div>
+    </div>
+
+    <div class="sect"><h3>งวดการจ่ายเงิน</h3>
+      <table><tbody>${(p.installments||[]).map(i=>`
+        <tr>
+          <td>งวดที่ ${i.no}</td>
+          <td>${fmtBaht(i.amount)} ฿</td>
+          <td>${i.paid
+            ? `<span class="pill" style="color:var(--green);border-color:var(--green)">จ่ายแล้ว</span>`
+            : `<span class="pill">รอจ่าย</span>`}</td>
+        </tr>`).join("")}</tbody></table>
+    </div>
+
+    ${(p.reviewers||[]).length>1?`<div class="sect"><h3>ผู้ประเมินทั้งหมด</h3>
+      ${p.reviewers.map(r=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)">
+          <span style="font-weight:${r.name===me?'700':'400'}">${esc(r.name)}${r.name===me?' <span class="pill" style="font-size:10px">คุณ</span>':''}</span>
+          ${r.result
+            ? `<span class="pill" style="color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'};border-color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'}">${esc(r.result)}</span>`
+            : `<span class="pill">${esc(r.status)}</span>`}
+        </div>`).join("")}
+    </div>`:""}
+
+    ${(p.attachments||[]).length?`<div class="sect"><h3>เอกสารโครงการ</h3>
+      ${p.attachments.map(a=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)">
+          <span>📄 ${esc(a.name)}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="muted" style="font-size:12px">${fmtDate(a.date)}</span>
+            ${a.driveFileId
+              ? `<a href="https://drive.google.com/file/d/${esc(a.driveFileId)}/view" target="_blank"
+                  class="btn" style="padding:4px 10px;font-size:12px;text-decoration:none">เปิด</a>`
+              : `<span class="muted" style="font-size:11px">ไม่มีลิงก์</span>`}
+          </div>
+        </div>`).join("")}
+    </div>`:`<div class="sect"><h3>เอกสารโครงการ</h3><p class="muted">ยังไม่มีเอกสารแนบ</p></div>`}
+  `;
+  document.getElementById("scrim").classList.remove("hidden");
+  document.getElementById("drawer").classList.remove("hidden");
+}
+
+async function doSubmitReview(projectId, result){
+  const noteEl = document.getElementById("rv_note");
+  const errEl  = document.getElementById("rv_err");
+  const note   = noteEl ? noteEl.value.trim() : "";
+  if(result==="ให้แก้ไข" && !note){
+    errEl.textContent="กรุณาระบุหมายเหตุ/เหตุผลที่ต้องแก้ไข";
+    return;
+  }
+  // ปิดปุ่มชั่วคราว
+  document.querySelectorAll("#drawer .btn.green, #drawer .btn.amber").forEach(b=>{
+    b.disabled=true; b.style.opacity=".6";
+  });
+  const r = await api("setEvaluation",{projectId,reviewerName:S.user.name,result,note});
+  if(r.ok){
+    await refresh();
+    openReviewDrawer(projectId); // reload drawer พร้อมผลใหม่
+  } else {
+    if(errEl) errEl.textContent="บันทึกไม่สำเร็จ: "+(r.error||"");
+    document.querySelectorAll("#drawer .btn.green, #drawer .btn.amber").forEach(b=>{
+      b.disabled=false; b.style.opacity="";
+    });
+  }
+}
+
+function resetReviewForm(projectId){
+  // เปิด drawer ใหม่แต่บังคับให้ผลประเมินเป็น "รอประเมิน" ชั่วคราวในหน้า
+  // (ไม่แก้ใน Sheet จนกว่าจะกด submit)
+  const p = S.projects.find(x=>x.id===projectId);
+  if(!p) return;
+  const me = S.user.name;
+  const rev = (p.reviewers||[]).find(r=>r.name===me);
+  if(rev) rev.status = "รอประเมิน"; // เปลี่ยนเฉพาะ local state ชั่วคราว
+  openReviewDrawer(projectId);
 }
 
 async function submitReview(projectId,result){
@@ -440,13 +880,21 @@ async function submitReview(projectId,result){
 function openDrawer(id){
   const p = S.projects.find(x=>x.id===id);
   if(!p) return;
+  const canEdit = ["admin","staff"].includes(S.user.role);
   document.getElementById("drawer").innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:start">
-      <div>
-        <h2 style="font-size:18px;color:var(--oxblood)">${esc(p.title)}</h2>
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+      <div style="flex:1;min-width:0">
+        <h2 style="font-size:17px;color:var(--oxblood);line-height:1.4">${esc(p.title)}</h2>
         <span class="muted">${esc(p.id)} · ${esc(p.dept)}</span>
       </div>
-      <button class="btn ghost" onclick="closeDrawer()">✕ ปิด</button>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        ${canEdit?`
+          <button class="btn" style="padding:7px 12px;font-size:13px"
+            onclick="closeDrawer();showAddProject(S.projects.find(x=>x.id==='${p.id}'))">✎ แก้ไข</button>
+          <button class="btn danger" style="padding:7px 12px;font-size:13px"
+            onclick="confirmDeleteProject('${p.id}','${esc(p.title).replace(/'/g,"\\'")}')">🗑</button>`:""}
+        <button class="btn ghost" style="padding:7px 12px;font-size:13px" onclick="closeDrawer()">✕</button>
+      </div>
     </div>
     <div style="margin-top:10px">${statusBadge(p.status)} ${healthBadge(p.health)}</div>
 
@@ -476,6 +924,8 @@ function openDrawer(id){
           <td>${i.paid
             ? `<span class="pill" style="color:var(--green);border-color:var(--green)">จ่ายแล้ว ${fmtDate(i.paidDate)}</span>`
             : `<span class="pill">รอจ่าย</span>`}</td>
+          ${canEdit?`<td><button class="btn ghost" style="padding:4px 9px;font-size:11px"
+            onclick="togglePayment('${p.id}',${i.no},${i.paid})">${i.paid?"ยกเลิก":"✓ บันทึกจ่าย"}</button></td>`:"<td></td>"}
         </tr>`).join("")}</tbody></table>
       <div class="muted" style="margin-top:6px">
         เบิกจ่ายแล้ว ${fmtBaht(p.paid)} / คงเหลือ ${fmtBaht(p.remaining)} ฿
@@ -512,6 +962,20 @@ function openDrawer(id){
   `;
   document.getElementById("scrim").classList.remove("hidden");
   document.getElementById("drawer").classList.remove("hidden");
+}
+
+async function togglePayment(projectId, installmentNo, currentPaid){
+  const paidDate = !currentPaid ? (new Date().toISOString().slice(0,10)) : "";
+  const r = await api("setPayment",{projectId, installmentNo, paid:!currentPaid, paidDate});
+  if(r.ok){ await refresh(); openDrawer(projectId); }
+  else alert("บันทึกไม่สำเร็จ: "+(r.error||""));
+}
+
+async function confirmDeleteProject(projectId, title){
+  if(!confirm(`ยืนยันลบโครงการ\n"${title}"\n\nข้อมูลทั้งหมด (งวดเงิน, ผู้ประเมิน, เอกสาร) จะถูกลบถาวร`)) return;
+  const r = await api("deleteProject",{projectId});
+  if(r.ok){ closeDrawer(); await refresh(); }
+  else alert("ลบไม่สำเร็จ: "+(r.error||""));
 }
 
 function closeDrawer(){

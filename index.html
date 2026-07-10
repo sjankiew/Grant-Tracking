@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ระบบติดตามสถานะทุนวิจัย</title>
+<title>ระบบบริหารจัดการและติดตามทุนวิจัย</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Noto+Serif+Thai:wght@600;700&display=swap" rel="stylesheet">
 <style>
@@ -22,7 +22,7 @@
   .btn.danger{background:var(--red);}
   .btn.amber{background:var(--amber);}
   .btn.green{background:var(--green);}
-  input,select{font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;width:100%;background:#fff;}
+  input,select,textarea{font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;width:100%;background:#fff;}
   label{font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px;}
   .hidden{display:none!important;}
   .card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px;}
@@ -82,7 +82,7 @@
   .reviewer-card{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--ivory);}
   .reviewer-card .rc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-weight:600;font-size:13px;color:var(--oxblood);}
   .section-label{font-size:13px;font-weight:700;color:var(--ink);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);}
-  input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(43,95,138,.12);}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(43,95,138,.12);}
   .btn-icon{background:transparent;border:1px solid var(--line);color:var(--red);padding:4px 10px;font-size:12px;border-radius:6px;}
   .btn-icon:hover{background:#fff0f0;}
   .saving{opacity:.6;pointer-events:none;}
@@ -92,7 +92,8 @@
 
 <div id="login">
   <div class="box card">
-    <h1>ระบบติดตามสถานะทุนวิจัย</h1>
+    <!-- ★ เปลี่ยนที่ 2: ชื่อระบบใหม่ -->
+    <h1>ระบบบริหารจัดการและติดตามทุนวิจัย</h1>
     <p class="muted" style="margin-top:0">สำนักงานบริหารงานวิจัย</p>
     <div style="margin-bottom:10px"><label>ชื่อผู้ใช้</label><input id="uid" value=""/></div>
     <div style="margin-bottom:12px"><label>รหัสผ่าน</label><input id="pwd" type="password" value="" onkeydown="if(event.key==='Enter')doLogin()"/></div>
@@ -126,6 +127,7 @@
 
 <div id="scrim" class="hidden" onclick="closeDrawer()"></div>
 <div id="drawer" class="hidden"></div>
+<div id="modal-root"></div>
 
 <script>
 // ======== ใส่ URL GAS Web App (/exec) ========
@@ -144,7 +146,6 @@ const STATUS_COLOR = {
   "ส่งเล่มสมบูรณ์":"var(--violet)","รอการประเมิน":"var(--amber)",
   "ปิดโครงการ":"var(--green)","ยุติโครงการ":"var(--grey)","รอคืนเงิน":"var(--red)"
 };
-// เพิ่ม "แจ้งเตือนแล้ว" ใน health
 const HEALTH_COLOR = {"ปกติ":"var(--green)","ใกล้กำหนด":"var(--amber)","ล่าช้า":"var(--red)","เสร็จสิ้น":"var(--grey)","แจ้งเตือนแล้ว":"var(--blue)"};
 const statusBadge = s => `<span class="badge" style="background:${STATUS_COLOR[s]||'var(--grey)'}">${esc(s)}</span>`;
 const healthBadge = h => `<span class="pill" style="color:${HEALTH_COLOR[h]||'var(--grey)'};border-color:${HEALTH_COLOR[h]||'var(--grey)'}">${esc(h)}</span>`;
@@ -152,7 +153,7 @@ const kpi = (v,l,c) => `<div class="card kpi"><div class="v" style="color:${c||'
 const loading = () => `<div class="loading"><div class="spinner"></div>กำลังโหลด...</div>`;
 
 // ======== CACHE (ลด GAS cold-start) ========
-const CACHE_TTL = 60000; // 60 วินาที
+const CACHE_TTL = 60000;
 let _cache = {};
 function cacheGet(k){ const c=_cache[k]; return (c && Date.now()-c.t < CACHE_TTL) ? c.v : null; }
 function cacheSet(k,v){ _cache[k]={v,t:Date.now()}; }
@@ -187,7 +188,6 @@ async function doLogin(){
     if(!r.ok){ errEl.textContent = r.error||"เข้าสู่ระบบไม่สำเร็จ"; return; }
     S.user  = r.user;
     S.token = r.token;
-    // ตั้ง page เริ่มต้นครั้งเดียวตอน login
     const menu = MENUS[r.user.role]||[];
     S.page = menu[0] ? menu[0][0] : "dash";
     document.getElementById("login").classList.add("hidden");
@@ -195,7 +195,6 @@ async function doLogin(){
     document.getElementById("whoName").textContent = r.user.name;
     document.getElementById("whoRole").textContent = r.user.roleLabel;
     buildNav();
-    // แสดงหน้า dash ก่อนแล้วโหลดข้อมูล background
     render();
     loadData();
   } catch(e){ errEl.textContent = e.message; }
@@ -217,7 +216,6 @@ const MENUS = {
   reviewer:[["myreviews","งานประเมินของฉัน"]]
 };
 
-// buildNav ไม่แตะ S.page เลย — แค่ highlight เมนูที่ active
 function buildNav(){
   const menu = MENUS[S.user.role]||[];
   document.getElementById("nav").innerHTML = menu.map(([k,label])=>{
@@ -226,7 +224,6 @@ function buildNav(){
   }).join("");
 }
 
-// go เปลี่ยน page แล้ว rebuild nav + render — ไม่มีการ reset
 function go(page){
   S.page = page;
   buildNav();
@@ -236,25 +233,15 @@ function go(page){
 // ======== DATA LOADING ========
 async function loadData(forceRefresh=false){
   if(forceRefresh) cacheClear();
-
-  // โหลด projects ก่อนเพราะสำคัญสุด — render ทันทีเมื่อได้
   const cachedProjects = !forceRefresh ? cacheGet("listProjects{}") : null;
   if(cachedProjects){ S.projects = cachedProjects.data||[]; buildNav(); render(); }
-
-  // ยิง 3 requests พร้อมกัน
   const prP  = api("listProjects", {}, !forceRefresh);
   const bgP  = api("listBudget",   {}, !forceRefresh);
-  const duP  = api("dueSoon",      {}, false); // due soon ไม่ cache (ต้องสด)
-
-  // รอทีละอันแล้ว render ทันที
+  const duP  = api("dueSoon",      {}, false);
   prP.then(pr=>{ S.projects=pr.data||[]; buildNav(); render(); }).catch(console.error);
   bgP.then(bg=>{ S.budget=bg.data||[]; if(S.page==="budget"||S.page==="overview") render(); }).catch(console.error);
   duP.then(du=>{ S.due=du.data||[]; buildNav(); if(S.page==="reminders") render(); }).catch(console.error);
-
-  // รอทั้งหมดเสร็จ
   await Promise.allSettled([prP, bgP, duP]);
-
-  // โหลด users เฉพาะ admin + reviewer (reviewer ต้องการดึง reviewer list)
   if(["admin","staff"].includes(S.user.role)){
     try { const ru=await api("listUsers",{},!forceRefresh); S.users=ru.data||[]; if(S.page==="users") render(); } catch(e){}
   }
@@ -284,14 +271,18 @@ function render(){
 }
 
 // ======== VIEWS ========
+// ★ เปลี่ยนที่ 1: ตารางโครงการแสดงเลขที่โครงการ + รหัสโครงการ
 function projectTable(list){
   if(!list.length) return `<p class="muted">ไม่มีข้อมูล</p>`;
   return `<table><thead><tr>
-    <th>รหัส</th><th>ชื่อโครงการ</th><th>หัวหน้า</th>
+    <th>รหัส / เลขที่โครงการ</th><th>ชื่อโครงการ</th><th>หัวหน้า</th>
     <th>สถานะ</th><th>สุขภาพ</th><th>กำหนดถัดไป</th>
   </tr></thead><tbody>${list.map(p=>`
     <tr class="click" onclick="openDrawer('${p.id}')">
-      <td><b>${esc(p.id)}</b></td>
+      <td>
+        ${p.projectNo ? `<div style="font-weight:700">${esc(p.projectNo)}</div>` : ''}
+        <div class="muted" style="font-size:11px">${esc(p.id)}</div>
+      </td>
       <td>${esc(p.title)}</td>
       <td>${esc(p.pi)}</td>
       <td>${statusBadge(p.status)}</td>
@@ -325,18 +316,39 @@ function viewProjects(v){
   v.innerHTML = `<div class="card">${projectTable(S.projects)}</div>`;
 }
 
+// ★ เปลี่ยนที่ 3: หน้างบประมาณแสดงสรุปจำนวนโครงการรายปี
 function viewBudget(v){
   if(["admin","staff"].includes(S.user.role))
     document.getElementById("pageActions").innerHTML =
       `<button class="btn" onclick="showAddBudget()">+ เพิ่มปีงบประมาณ</button>`;
   if(!S.budget.length){ v.innerHTML=loading(); return; }
-  v.innerHTML = `<div class="card"><table><thead><tr>
-    <th>ปีงบประมาณ (พ.ศ.)</th><th>จัดสรร</th><th>ผูกพัน</th>
-    <th>เบิกจ่าย</th><th>คงเหลือ</th><th style="width:160px">สัดส่วนผูกพัน</th><th></th>
+
+  // สรุปรวมทุกปี
+  const totalProjects = S.budget.reduce((s,b) => s + (b.projectCount||0), 0);
+  const totalAlloc    = S.budget.reduce((s,b) => s + b.allocated, 0);
+  const totalCommit   = S.budget.reduce((s,b) => s + b.committed, 0);
+  const totalPaid     = S.budget.reduce((s,b) => s + b.paid, 0);
+
+  v.innerHTML = `
+    <div class="grid kpis" style="margin-bottom:16px">
+      ${kpi(totalProjects,"โครงการวิจัยทั้งหมด","var(--blue)")}
+      ${kpi(fmtBaht(totalAlloc)+" ฿","งบจัดสรรรวม")}
+      ${kpi(fmtBaht(totalCommit)+" ฿","งบผูกพันรวม","var(--amber)")}
+      ${kpi(fmtBaht(totalPaid)+" ฿","เบิกจ่ายรวม","var(--green)")}
+    </div>
+    <div class="card"><table><thead><tr>
+    <th>ปีงบประมาณ (พ.ศ.)</th>
+    <th style="text-align:center">จำนวนโครงการ</th>
+    <th>จัดสรร</th><th>ผูกพัน</th>
+    <th>เบิกจ่าย</th><th>คงเหลือ</th>
+    <th style="width:160px">สัดส่วนผูกพัน</th><th></th>
   </tr></thead><tbody>${S.budget.map(b=>{
     const pct = b.allocated ? Math.min(100,Math.round(b.committed/b.allocated*100)) : 0;
     return `<tr>
       <td><b>${b.year}</b></td>
+      <td style="text-align:center">
+        <span class="badge" style="background:var(--blue);font-size:14px;padding:4px 14px">${b.projectCount||0}</span>
+      </td>
       <td>${fmtBaht(b.allocated)}</td><td>${fmtBaht(b.committed)}</td>
       <td>${fmtBaht(b.paid)}</td><td>${fmtBaht(b.remaining)}</td>
       <td><div class="bar"><i style="width:${pct}%"></i></div>
@@ -391,7 +403,7 @@ function showTrackModal(projectId, projectTitle){
         </div>
       </div>
       <div class="field"><label>หมายเหตุ / รายละเอียดการติดตาม</label>
-        <textarea id="tr_note" rows="4" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;resize:vertical" placeholder="เช่น ติดต่อ ดร.ชื่อ ทาง LINE แล้ว รอส่งรายงานภายใน 7 วัน"></textarea>
+        <textarea id="tr_note" rows="4" style="resize:vertical" placeholder="เช่น ติดต่อ ดร.ชื่อ ทาง LINE แล้ว รอส่งรายงานภายใน 7 วัน"></textarea>
       </div>
       <div class="field"><label>สถานะการติดตาม</label>
         <select id="tr_status">
@@ -410,8 +422,6 @@ function showTrackModal(projectId, projectTitle){
   </div>`);
 }
 
-// (saveTracking อยู่ด้านบนแล้ว)
-
 function viewEvals(v){
   const list = S.projects.filter(p=>p.reviewers&&p.reviewers.length);
   if(!list.length){ v.innerHTML=`<div class="card"><p class="muted">ยังไม่มีโครงการที่อยู่ระหว่างประเมิน</p></div>`; return; }
@@ -426,6 +436,7 @@ function viewEvals(v){
       <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:8px;margin-bottom:10px">
         <div>
           <span style="font-weight:700">${esc(p.id)}</span>
+          ${p.projectNo ? `<span class="muted" style="margin-left:6px;font-size:12px">(${esc(p.projectNo)})</span>` : ''}
           <span style="margin:0 6px;color:var(--muted)">—</span>
           <span>${esc(p.title)}</span>
         </div>
@@ -458,6 +469,7 @@ async function closeProjectAfterEval(projectId){
   const payload = Object.assign({}, p, {
     id: p.id, status: "ปิดโครงการ",
     pi: p.pi, piPhone: p.piPhone, piEmail: p.piEmail,
+    projectNo: p.projectNo,
     _note: "ผู้ประเมินทุกท่านให้ผ่าน", _by: S.user.id
   });
   const r = await api("updateProject", payload);
@@ -473,6 +485,7 @@ function setRevisionDeadline(projectId){
   if(!p) return;
   const payload = Object.assign({}, p, {
     id: p.id, pi: p.pi, piPhone: p.piPhone, piEmail: p.piEmail,
+    projectNo: p.projectNo,
     revisionDeadline: deadline, _by: S.user.id
   });
   api("updateProject", payload).then(r=>{
@@ -504,13 +517,6 @@ function viewUsers(v){
 }
 
 // ======== MODAL: เพิ่ม/แก้ไข ผู้ใช้งาน ========
-// สร้าง user_id อัตโนมัติจากบทบาท + timestamp
-function genUserId(role){
-  const prefix = {admin:"adm",staff:"stf",dean:"dean",reviewer:"rev"}[role]||"usr";
-  return prefix + Date.now().toString().slice(-5);
-}
-function updateAutoId(sel){ /* id สร้างอัตโนมัติตอน save */ }
-
 function showUserModal(existing){
   const u = existing || {};
   const isEdit = !!u.id;
@@ -568,17 +574,14 @@ async function sendReminder(id){
   if(!confirm("ส่งอีเมลแจ้งเตือนไปยังผู้ขอทุน?")) return;
   const r = await api("sendReminder",{projectId:id});
   if(r.ok){
-    // 5. อัปเดต health ใน local state ทันที
     const p = S.projects.find(x=>x.id===id);
     if(p) p.health = "แจ้งเตือนแล้ว";
-    // อัปเดต due list
     S.due = S.due.filter(d=>d.id!==id);
     buildNav(); render();
     showToast("ส่งอีเมลแล้ว — สถานะเปลี่ยนเป็น 'แจ้งเตือนแล้ว'");
   } else alert("ส่งไม่สำเร็จ: "+(r.error||""));
 }
 
-// 6. แก้ saveTracking ให้ส่ง channel และ note ถูกต้อง
 async function saveTracking(projectId){
   const btn   = document.getElementById("saveTrackBtn");
   const errEl = document.getElementById("trackErr");
@@ -589,22 +592,12 @@ async function saveTracking(projectId){
   const status  = document.getElementById("tr_status").value;
   if(!date){ errEl.textContent="กรุณาเลือกวันที่"; return; }
   btn.classList.add("saving"); btn.textContent="กำลังบันทึก...";
-
   const CHANNEL_LABEL = {"email":"อีเมล","phone":"โทรศัพท์","line":"Line","meeting":"ประชุม","letter":"หนังสือราชการ","other":"อื่น ๆ"};
   const channelLabel = CHANNEL_LABEL[channel]||channel;
   const STATUS_LABEL = {"contacted":"ติดต่อได้แล้ว","no_response":"ยังไม่ได้รับการตอบกลับ","scheduled":"นัดหมายเรียบร้อย","escalated":"ส่งเรื่องต่อผู้บังคับบัญชา"};
   const statusLabel  = STATUS_LABEL[status]||status;
-
   try {
-    // บันทึก reminder พร้อม channel และ note ที่ถูกต้อง
-    const r = await api("logReminder",{
-      projectId,
-      channel: channelLabel,   // บันทึกค่าภาษาไทยเพื่อให้ sheet อ่านได้ถูก
-      note,
-      date,
-      trackStatus: statusLabel
-    });
-    // อัปเดต health ใน local state
+    const r = await api("logReminder",{projectId, channel:channelLabel, note, date, trackStatus:statusLabel});
     const p = S.projects.find(x=>x.id===projectId);
     if(p) p.health = "แจ้งเตือนแล้ว";
     S.due = S.due.filter(d=>d.id!==projectId);
@@ -631,15 +624,12 @@ async function saveUser(existingId){
   const pwd       = document.getElementById("u_pwd").value;
   const sel       = document.getElementById("u_role");
   const roleLabel = sel.options[sel.selectedIndex].dataset.label || role;
-
   if(!id)   { errEl.textContent="กรุณากรอกรหัสผู้ใช้ (ID)"; return; }
   if(id.includes(" ")){ errEl.textContent="รหัสผู้ใช้ต้องไม่มีช่องว่าง"; return; }
   if(!name) { errEl.textContent="กรุณากรอกชื่อ-นามสกุล"; return; }
   if(!existingId && !pwd){ errEl.textContent="กรุณากรอกรหัสผ่าน"; return; }
-
   const payload = { id, name, role, roleLabel, phone, email };
   if(pwd) payload.password = pwd;
-
   btn.classList.add("saving"); btn.textContent="กำลังบันทึก...";
   try {
     const r = await api("upsertUser", payload);
@@ -650,11 +640,9 @@ async function saveUser(existingId){
       return;
     }
     closeModal();
-    // reload users แล้ว re-render ทันที
     const ru = await api("listUsers");
     S.users = ru.data || [];
     viewUsers(document.getElementById("view"));
-    // แสดง toast
     showToast(existingId ? `แก้ไขข้อมูล "${name}" แล้ว` : `เพิ่มผู้ใช้ "${name}" (${id}) แล้ว`);
   } catch(e){
     if(errEl) errEl.textContent = e.message;
@@ -675,7 +663,6 @@ async function deleteUser(userId, userName){
   } else alert("ลบไม่สำเร็จ: "+(r.error||""));
 }
 
-// Toast notification เบา ๆ
 function showToast(msg){
   let t = document.getElementById("toast");
   if(!t){ t=document.createElement("div"); t.id="toast"; t.style.cssText="position:fixed;bottom:24px;right:24px;background:#1F2933;color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;z-index:99;box-shadow:0 4px 16px rgba(0,0,0,.2);transition:opacity .3s"; document.body.appendChild(t); }
@@ -702,7 +689,7 @@ function viewOverview(v){
         const pct = b.allocated?Math.round(b.committed/b.allocated*100):0;
         return `<div style="margin-bottom:10px">
           <div style="display:flex;justify-content:space-between">
-            <span><b>${b.year}</b></span>
+            <span><b>${b.year}</b> <span class="muted" style="font-size:12px">(${b.projectCount||0} โครงการ)</span></span>
             <span class="muted">ผูกพัน ${fmtBaht(b.committed)} / ${fmtBaht(b.allocated)}</span>
           </div>
           <div class="bar"><i style="width:${pct}%"></i></div>
@@ -735,10 +722,8 @@ function viewMyReviews(v){
   const tasks = [];
   S.projects.forEach(p=>(p.reviewers||[]).forEach(r=>{ if(r.name===me) tasks.push({p,r}); }));
   if(!tasks.length){ v.innerHTML=`<div class="card"><p class="muted">ยังไม่มีงานประเมินที่ได้รับมอบหมาย</p></div>`; return; }
-
   const pending = tasks.filter(t=>t.r.status!=="ประเมินแล้ว").length;
   const done    = tasks.filter(t=>t.r.status==="ประเมินแล้ว").length;
-
   v.innerHTML = `
     <div class="grid kpis" style="margin-bottom:16px">
       ${kpi(tasks.length,"งานประเมินทั้งหมด")}
@@ -753,6 +738,7 @@ function viewMyReviews(v){
       <div style="display:flex;justify-content:space-between;align-items:start">
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;color:var(--oxblood)">${esc(p.id)}</div>
+          ${p.projectNo ? `<div class="muted" style="font-size:11px">${esc(p.projectNo)}</div>` : ''}
           <div style="font-size:13px;margin:2px 0">${esc(p.title)}</div>
           <div class="muted" style="font-size:12px">${esc(p.pi)} · ${esc(p.dept)}</div>
         </div>
@@ -769,25 +755,22 @@ function viewMyReviews(v){
     </div>`).join("")}`;
 }
 
-// Drawer สำหรับ reviewer — เห็นรายละเอียดโครงการ + ฟอร์มประเมิน
+// Drawer สำหรับ reviewer
 function openReviewDrawer(projectId){
   const p = S.projects.find(x=>x.id===projectId);
   if(!p) return;
   const me = S.user.name;
   const myReview = (p.reviewers||[]).find(r=>r.name===me) || {};
   const alreadyDone = myReview.status==="ประเมินแล้ว";
-
   document.getElementById("drawer").innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
       <div style="flex:1;min-width:0">
         <h2 style="font-size:17px;color:var(--oxblood);line-height:1.4">${esc(p.title)}</h2>
-        <span class="muted">${esc(p.id)} · ${esc(p.dept)}</span>
+        <span class="muted">${esc(p.id)}${p.projectNo ? ' · '+esc(p.projectNo) : ''} · ${esc(p.dept)}</span>
       </div>
       <button class="btn ghost" style="padding:7px 12px;font-size:13px;flex-shrink:0" onclick="closeDrawer()">✕ ปิด</button>
     </div>
     <div style="margin-top:10px">${statusBadge(p.status)} ${healthBadge(p.health)}</div>
-
-    <!-- ส่วนประเมิน (เด่นชัดขึ้นมาก่อน) -->
     <div style="margin-top:18px;background:${alreadyDone?'#F0FFF6':'#FFFBF0'};border:2px solid ${alreadyDone?'var(--green)':'var(--amber)'};border-radius:12px;padding:16px">
       <h3 style="font-size:14px;color:${alreadyDone?'var(--green)':'var(--oxblood)'};margin-bottom:12px">
         ${alreadyDone?"✓ ผลการประเมินของคุณ":"📋 บันทึกผลการประเมิน"}
@@ -805,26 +788,18 @@ function openReviewDrawer(projectId){
       ` : `
         <div style="margin-bottom:10px">
           <label>หมายเหตุ / ข้อเสนอแนะ</label>
-          <textarea id="rv_note" rows="3" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;resize:vertical" placeholder="ระบุข้อเสนอแนะ หรือเหตุผลที่ต้องแก้ไข (ถ้ามี)"></textarea>
+          <textarea id="rv_note" rows="3" style="resize:vertical" placeholder="ระบุข้อเสนอแนะ หรือเหตุผลที่ต้องแก้ไข (ถ้ามี)"></textarea>
         </div>
         <div style="display:flex;gap:10px">
-          <button class="btn green" style="flex:1;padding:11px" onclick="doSubmitReview('${p.id}','ผ่าน')">
-            ✓ ผ่าน
-          </button>
-          <button class="btn amber" style="flex:1;padding:11px" onclick="doSubmitReview('${p.id}','ให้แก้ไข')">
-            ✎ ให้แก้ไข
-          </button>
+          <button class="btn green" style="flex:1;padding:11px" onclick="doSubmitReview('${p.id}','ผ่าน')">✓ ผ่าน</button>
+          <button class="btn amber" style="flex:1;padding:11px" onclick="doSubmitReview('${p.id}','ให้แก้ไข')">✎ ให้แก้ไข</button>
         </div>
         <div id="rv_err" style="color:var(--red);font-size:12px;margin-top:6px"></div>
       `}
     </div>
-
     <div class="sect"><h3>ข้อมูลหัวหน้าโครงการ</h3>
       <div><b>${esc(p.pi)}</b></div>
-      <div class="muted">
-        <a href="tel:${esc(p.piPhone)}">${esc(p.piPhone)}</a> ·
-        <a href="mailto:${esc(p.piEmail)}">${esc(p.piEmail)}</a>
-      </div>
+      <div class="muted"><a href="tel:${esc(p.piPhone)}">${esc(p.piPhone)}</a> · <a href="mailto:${esc(p.piEmail)}">${esc(p.piEmail)}</a></div>
       <div class="row2" style="margin-top:8px">
         <div><label>ปีงบประมาณ</label>${p.budgetYear}</div>
         <div><label>ระยะเวลา</label>${p.durationMonths} เดือน</div>
@@ -832,38 +807,26 @@ function openReviewDrawer(projectId){
         <div><label>วงเงินรวม</label>${fmtBaht(p.total)} ฿</div>
       </div>
     </div>
-
     <div class="sect"><h3>งวดการจ่ายเงิน</h3>
       <table><tbody>${(p.installments||[]).map(i=>`
-        <tr>
-          <td>งวดที่ ${i.no}</td>
-          <td>${fmtBaht(i.amount)} ฿</td>
-          <td>${i.paid
-            ? `<span class="pill" style="color:var(--green);border-color:var(--green)">จ่ายแล้ว</span>`
-            : `<span class="pill">รอจ่าย</span>`}</td>
+        <tr><td>งวดที่ ${i.no}</td><td>${fmtBaht(i.amount)} ฿</td>
+          <td>${i.paid?`<span class="pill" style="color:var(--green);border-color:var(--green)">จ่ายแล้ว</span>`:`<span class="pill">รอจ่าย</span>`}</td>
         </tr>`).join("")}</tbody></table>
     </div>
-
     ${(p.reviewers||[]).length>1?`<div class="sect"><h3>ผู้ประเมินทั้งหมด</h3>
       ${p.reviewers.map(r=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)">
           <span style="font-weight:${r.name===me?'700':'400'}">${esc(r.name)}${r.name===me?' <span class="pill" style="font-size:10px">คุณ</span>':''}</span>
-          ${r.result
-            ? `<span class="pill" style="color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'};border-color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'}">${esc(r.result)}</span>`
-            : `<span class="pill">${esc(r.status)}</span>`}
+          ${r.result?`<span class="pill" style="color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'};border-color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'}">${esc(r.result)}</span>`:`<span class="pill">${esc(r.status)}</span>`}
         </div>`).join("")}
     </div>`:""}
-
     ${(p.attachments||[]).length?`<div class="sect"><h3>เอกสารโครงการ</h3>
       ${p.attachments.map(a=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)">
           <span>📄 ${esc(a.name)}</span>
           <div style="display:flex;align-items:center;gap:8px">
             <span class="muted" style="font-size:12px">${fmtDate(a.date)}</span>
-            ${a.driveFileId
-              ? `<a href="https://drive.google.com/file/d/${esc(a.driveFileId)}/view" target="_blank"
-                  class="btn" style="padding:4px 10px;font-size:12px;text-decoration:none">เปิด</a>`
-              : `<span class="muted" style="font-size:11px">ไม่มีลิงก์</span>`}
+            ${a.driveFileId?`<a href="https://drive.google.com/file/d/${esc(a.driveFileId)}/view" target="_blank" class="btn" style="padding:4px 10px;font-size:12px;text-decoration:none">เปิด</a>`:`<span class="muted" style="font-size:11px">ไม่มีลิงก์</span>`}
           </div>
         </div>`).join("")}
     </div>`:`<div class="sect"><h3>เอกสารโครงการ</h3><p class="muted">ยังไม่มีเอกสารแนบ</p></div>`}
@@ -876,44 +839,23 @@ async function doSubmitReview(projectId, result){
   const noteEl = document.getElementById("rv_note");
   const errEl  = document.getElementById("rv_err");
   const note   = noteEl ? noteEl.value.trim() : "";
-  if(result==="ให้แก้ไข" && !note){
-    errEl.textContent="กรุณาระบุหมายเหตุ/เหตุผลที่ต้องแก้ไข";
-    return;
-  }
-  // ปิดปุ่มชั่วคราว
-  document.querySelectorAll("#drawer .btn.green, #drawer .btn.amber").forEach(b=>{
-    b.disabled=true; b.style.opacity=".6";
-  });
+  if(result==="ให้แก้ไข" && !note){ errEl.textContent="กรุณาระบุหมายเหตุ/เหตุผลที่ต้องแก้ไข"; return; }
+  document.querySelectorAll("#drawer .btn.green, #drawer .btn.amber").forEach(b=>{ b.disabled=true; b.style.opacity=".6"; });
   const r = await api("setEvaluation",{projectId,reviewerName:S.user.name,result,note});
-  if(r.ok){
-    await refresh();
-    openReviewDrawer(projectId); // reload drawer พร้อมผลใหม่
-  } else {
-    if(errEl) errEl.textContent="บันทึกไม่สำเร็จ: "+(r.error||"");
-    document.querySelectorAll("#drawer .btn.green, #drawer .btn.amber").forEach(b=>{
-      b.disabled=false; b.style.opacity="";
-    });
-  }
+  if(r.ok){ await refresh(); openReviewDrawer(projectId); }
+  else { if(errEl) errEl.textContent="บันทึกไม่สำเร็จ: "+(r.error||""); document.querySelectorAll("#drawer .btn.green, #drawer .btn.amber").forEach(b=>{ b.disabled=false; b.style.opacity=""; }); }
 }
 
 function resetReviewForm(projectId){
-  // เปิด drawer ใหม่แต่บังคับให้ผลประเมินเป็น "รอประเมิน" ชั่วคราวในหน้า
-  // (ไม่แก้ใน Sheet จนกว่าจะกด submit)
   const p = S.projects.find(x=>x.id===projectId);
   if(!p) return;
   const me = S.user.name;
   const rev = (p.reviewers||[]).find(r=>r.name===me);
-  if(rev) rev.status = "รอประเมิน"; // เปลี่ยนเฉพาะ local state ชั่วคราว
+  if(rev) rev.status = "รอประเมิน";
   openReviewDrawer(projectId);
 }
 
-async function submitReview(projectId,result){
-  const note = prompt("หมายเหตุการประเมิน (ถ้ามี):")||"";
-  const r = await api("setEvaluation",{projectId,reviewerName:S.user.name,result,note});
-  if(r.ok){ await refresh(); } else alert("บันทึกไม่สำเร็จ: "+(r.error||""));
-}
-
-// ======== DRAWER ========
+// ======== DRAWER: รายละเอียดโครงการ (admin/staff) ========
 function openDrawer(id){
   const p = S.projects.find(x=>x.id===id);
   if(!p) return;
@@ -922,7 +864,12 @@ function openDrawer(id){
     <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
       <div style="flex:1;min-width:0">
         <h2 style="font-size:17px;color:var(--oxblood);line-height:1.4">${esc(p.title)}</h2>
-        <span class="muted">${esc(p.id)} · ${esc(p.dept)}</span>
+        <!-- ★ เปลี่ยนที่ 1: แสดงเลขที่โครงการใน drawer -->
+        <div>
+          <span class="muted">${esc(p.id)}</span>
+          ${p.projectNo ? ` <span style="font-weight:600;color:var(--ink)">· ${esc(p.projectNo)}</span>` : ''}
+          <span class="muted"> · ${esc(p.dept)}</span>
+        </div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
         ${canEdit?`
@@ -937,82 +884,59 @@ function openDrawer(id){
 
     <div class="sect"><h3>ข้อมูลหัวหน้าโครงการ</h3>
       <div><b>${esc(p.pi)}</b></div>
-      <div class="muted">
-        <a href="tel:${esc(p.piPhone)}">${esc(p.piPhone)}</a> ·
-        <a href="mailto:${esc(p.piEmail)}">${esc(p.piEmail)}</a>
-      </div>
+      <div class="muted"><a href="tel:${esc(p.piPhone)}">${esc(p.piPhone)}</a> · <a href="mailto:${esc(p.piEmail)}">${esc(p.piEmail)}</a></div>
       <div class="row2" style="margin-top:8px">
         <div><label>ปีงบประมาณ</label>${p.budgetYear}</div>
         <div><label>ระยะเวลา</label>${p.durationMonths} เดือน</div>
         <div><label>วันทำสัญญา</label>${fmtDate(p.contractDate)}</div>
         <div><label>วงเงินรวม</label>${fmtBaht(p.total)} ฿</div>
       </div>
-      ${p.milestone?`<div class="note" style="margin-top:10px">
-        ⏰ ${esc(p.milestone.label)} — ${fmtDate(p.milestone.date)}
-        (เหลือ ${p.milestone.daysLeft} วัน)
-      </div>`:""}
+      ${p.milestone?`<div class="note" style="margin-top:10px">⏰ ${esc(p.milestone.label)} — ${fmtDate(p.milestone.date)} (เหลือ ${p.milestone.daysLeft} วัน)</div>`:""}
     </div>
 
-    <div class="sect"><h3>การจ่ายเงิน 3 งวด</h3>
+    <div class="sect"><h3>การจ่ายเงิน</h3>
       <table><tbody>${(p.installments||[]).map(i=>`
         <tr>
           <td>งวดที่ ${i.no}</td>
           <td>${fmtBaht(i.amount)} ฿</td>
-          <td>${i.paid
-            ? `<span class="pill" style="color:var(--green);border-color:var(--green)">จ่ายแล้ว ${fmtDate(i.paidDate)}</span>`
-            : `<span class="pill">รอจ่าย</span>`}</td>
-          ${canEdit?`<td><button class="btn ghost" style="padding:4px 9px;font-size:11px"
-            onclick="togglePayment('${p.id}',${i.no},${i.paid})">${i.paid?"ยกเลิก":"✓ บันทึกจ่าย"}</button></td>`:"<td></td>"}
+          <td>${i.paid?`<span class="pill" style="color:var(--green);border-color:var(--green)">จ่ายแล้ว ${fmtDate(i.paidDate)}</span>`:`<span class="pill">รอจ่าย</span>`}</td>
+          ${canEdit?`<td><button class="btn ghost" style="padding:4px 9px;font-size:11px" onclick="togglePayment('${p.id}',${i.no},${i.paid})">${i.paid?"ยกเลิก":"✓ บันทึกจ่าย"}</button></td>`:"<td></td>"}
         </tr>`).join("")}</tbody></table>
-      <div class="muted" style="margin-top:6px">
-        เบิกจ่ายแล้ว ${fmtBaht(p.paid)} / คงเหลือ ${fmtBaht(p.remaining)} ฿
-      </div>
+      <div class="muted" style="margin-top:6px">เบิกจ่ายแล้ว ${fmtBaht(p.paid)} / คงเหลือ ${fmtBaht(p.remaining)} ฿</div>
     </div>
 
     ${p.refund?`<div class="sect"><h3>การคืนเงิน</h3>
       <div class="row2">
-        <div><label>ต้องคืน</label>${fmtBaht(p.refund.required)} ฿</div>
+        <div><label>จำนวนที่ต้องคืน</label>${fmtBaht(p.refund.required)} ฿</div>
         <div><label>คืนแล้ว</label>${fmtBaht(p.refund.returned)} ฿</div>
-        <div><label>คงค้าง</label><b style="color:var(--red)">${fmtBaht(p.refund.required-p.refund.returned)} ฿</b></div>
-        <div><label>กำหนดคืน</label>${fmtDate(p.refund.deadline)}</div>
-      </div></div>`:""}
+      </div>
+      <div><label>กำหนดคืน</label>${fmtDate(p.refund.deadline)}</div>
+    </div>`:""}
 
     ${(p.reviewers||[]).length?`<div class="sect"><h3>ผู้ประเมิน</h3>
-      ${p.reviewers.map(r=>`
-        <div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:6px">
-          <b>${esc(r.name)}</b>
-          ${r.result
-            ? `<span class="pill" style="float:right;color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'};border-color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'}">${esc(r.result)}</span>`
-            : `<span class="pill" style="float:right">${esc(r.status)}</span>`}
-          <div class="muted" style="font-size:12px;clear:both">${esc(r.email||'')} · ${esc(r.phone||'')}</div>
-          ${r.note?`<div style="font-size:12px;margin-top:4px">${esc(r.note)}</div>`:""}
-        </div>`).join("")}
+      <table><thead><tr><th>ผู้ประเมิน</th><th>สถานะ</th><th>ผล</th><th>หมายเหตุ</th></tr></thead>
+      <tbody>${p.reviewers.map(r=>`
+        <tr>
+          <td><div style="font-weight:600">${esc(r.name)}</div><div class="muted" style="font-size:11px">${esc(r.email||'')}</div></td>
+          <td>${r.status==="ประเมินแล้ว"?`<span class="pill" style="color:var(--green);border-color:var(--green)">✓ ประเมินแล้ว</span>`:`<span class="pill" style="color:var(--amber);border-color:var(--amber)">⏳ รอประเมิน</span>`}</td>
+          <td>${r.result?`<span class="pill" style="color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'};border-color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'}">${esc(r.result)}</span>`:'—'}</td>
+          <td class="muted" style="font-size:12px">${esc(r.note||'—')}</td>
+        </tr>`).join("")}</tbody></table>
     </div>`:""}
 
-    ${(p.attachments||[]).length?`<div class="sect"><h3>เอกสารแนบ</h3>
+    ${(p.attachments||[]).length?`<div class="sect"><h3>เอกสารโครงการ</h3>
       ${p.attachments.map(a=>`
-        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)">
           <span>📄 ${esc(a.name)}</span>
-          <span class="muted" style="font-size:12px">${esc(a.by)} · ${fmtDate(a.date)}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="muted" style="font-size:12px">${fmtDate(a.date)}</span>
+            ${a.driveFileId?`<a href="https://drive.google.com/file/d/${esc(a.driveFileId)}/view" target="_blank" class="btn" style="padding:4px 10px;font-size:12px;text-decoration:none">เปิด</a>`:`<span class="muted" style="font-size:11px">ไม่มีลิงก์</span>`}
+          </div>
         </div>`).join("")}
-    </div>`:""}
+    </div>`:`<div class="sect"><h3>เอกสารโครงการ</h3><p class="muted">ยังไม่มีเอกสารแนบ</p></div>`}
   `;
   document.getElementById("scrim").classList.remove("hidden");
   document.getElementById("drawer").classList.remove("hidden");
-}
-
-async function togglePayment(projectId, installmentNo, currentPaid){
-  const paidDate = !currentPaid ? (new Date().toISOString().slice(0,10)) : "";
-  const r = await api("setPayment",{projectId, installmentNo, paid:!currentPaid, paidDate});
-  if(r.ok){ await refresh(); openDrawer(projectId); }
-  else alert("บันทึกไม่สำเร็จ: "+(r.error||""));
-}
-
-async function confirmDeleteProject(projectId, title){
-  if(!confirm(`ยืนยันลบโครงการ\n"${title}"\n\nข้อมูลทั้งหมด (งวดเงิน, ผู้ประเมิน, เอกสาร) จะถูกลบถาวร`)) return;
-  const r = await api("deleteProject",{projectId});
-  if(r.ok){ closeDrawer(); await refresh(); }
-  else alert("ลบไม่สำเร็จ: "+(r.error||""));
 }
 
 function closeDrawer(){
@@ -1020,338 +944,266 @@ function closeDrawer(){
   document.getElementById("drawer").classList.add("hidden");
 }
 
-// ======== MODAL ENGINE ========
+// ======== MODAL HELPERS ========
 function openModal(html){
-  let el = document.getElementById("modalRoot");
-  if(!el){ el=document.createElement("div"); el.id="modalRoot"; document.body.appendChild(el); }
-  el.innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this)closeModal()">${html}</div>`;
+  document.getElementById("modal-root").innerHTML =
+    `<div class="modal-backdrop" onclick="if(event.target===this)closeModal()">${html}</div>`;
 }
 function closeModal(){
-  const el = document.getElementById("modalRoot");
-  if(el) el.innerHTML = "";
+  document.getElementById("modal-root").innerHTML = "";
 }
 
 // ======== MODAL: เพิ่ม/แก้ไข โครงการ ========
+// ★ เปลี่ยนที่ 1: เพิ่มช่องเลขที่โครงการ
 function showAddProject(existing){
   const p = existing || {};
   const isEdit = !!p.id;
+  const curYear = new Date().getFullYear() + 543;
+  const years = [];
+  for(let y = curYear - 2; y <= curYear + 3; y++) years.push(y);
   const statuses = ["ทำสัญญาแล้ว","รายงานความก้าวหน้าครั้งที่ 1","ส่งเล่มสมบูรณ์","รอการประเมิน","ปิดโครงการ","ยุติโครงการ","รอคืนเงิน"];
-  const inst = p.installments || [{no:1,amount:"",paid:false,paidDate:""},{no:2,amount:"",paid:false,paidDate:""},{no:3,amount:"",paid:false,paidDate:""}];
-  const revs = p.reviewers || [];
 
-  openModal(`<div class="modal">
+  // ดึงค่างวดเงิน
+  const inst = p.installments || [{}];
+  const i1 = inst[0] ? inst[0].amount : '';
+  const i2 = inst[1] ? inst[1].amount : '';
+  const i3 = inst[2] ? inst[2].amount : '';
+
+  // ดึงค่าผู้ประเมิน
+  const revs = p.reviewers || [];
+  const r1 = revs[0] ? revs[0].name : '';
+  const r2 = revs[1] ? revs[1].name : '';
+  const r3 = revs[2] ? revs[2].name : '';
+
+  openModal(`<div class="modal" style="max-width:640px">
     <div class="modal-header">
-      <h2>${isEdit?"✎ แก้ไขโครงการ":"+ เพิ่มโครงการวิจัย"}</h2>
+      <h2>${isEdit?"✎ แก้ไขโครงการ":"+ สร้างโครงการใหม่"}</h2>
       <button class="btn ghost" style="padding:6px 12px" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="f_editId" value="${isEdit?esc(p.id):''}"/>
 
-      <div class="section-label">ข้อมูลโครงการ</div>
-      <div class="field">
-        <label>ชื่อโครงการ *</label>
-        <input id="f_title" value="${esc(p.title||"")}" placeholder="ชื่อโครงการวิจัย"/>
-      </div>
       <div class="field-row">
-        <div><label>ปีงบประมาณ (พ.ศ.) *</label>
-          <input id="f_year" type="number" value="${p.budgetYear||2569}" placeholder="2569"/></div>
-        <div><label>ระยะเวลา (เดือน) *</label>
-          <input id="f_duration" type="number" value="${p.durationMonths||12}" placeholder="12"/></div>
-      </div>
-      <div class="field-row">
-        <div><label>วันทำสัญญา *</label>
-          <input id="f_contract" type="date" value="${p.contractDate||""}"/></div>
-        <div><label>วงเงินรวม (บาท) *</label>
-          <input id="f_total" type="number" value="${p.total||""}" placeholder="500000"/></div>
-      </div>
-      <div class="field">
-        <label>สถานะ</label>
-        <select id="f_status">${statuses.map(s=>`<option value="${s}"${(p.status||"ทำสัญญาแล้ว")===s?" selected":""}>${s}</option>`).join("")}</select>
+        <!-- ★ ช่องใหม่: เลขที่โครงการ -->
+        <div class="field">
+          <label>เลขที่โครงการ <span class="muted">(ไม่จำเป็น)</span></label>
+          <input id="f_projectNo" value="${esc(p.projectNo||'')}" placeholder="เช่น มทร.สต./1/2567"/>
+          <p style="font-size:11px;color:var(--muted);margin:3px 0 0">รหัส RG-… จะสร้างอัตโนมัติ</p>
+        </div>
+        <div class="field">
+          <label>ปีงบประมาณ (พ.ศ.) *</label>
+          <select id="f_year">
+            ${years.map(y=>`<option value="${y}"${Number(p.budgetYear)===y?" selected":""}>${y}</option>`).join("")}
+          </select>
+        </div>
       </div>
 
-      <div class="section-label">หัวหน้าโครงการ</div>
       <div class="field">
-        <label>ชื่อ-นามสกุล *</label>
-        <input id="f_pi" value="${esc(p.pi||"")}" placeholder="ดร. ชื่อ นามสกุล"/>
-      </div>
-      <div class="field-row">
-        <div><label>เบอร์โทร</label>
-          <input id="f_phone" value="${esc(p.piPhone||"")}" placeholder="081-234-5678"/></div>
-        <div><label>อีเมล</label>
-          <input id="f_email" type="email" value="${esc(p.piEmail||"")}" placeholder="name@univ.ac.th"/></div>
+        <label>ชื่อโครงการวิจัย *</label>
+        <input id="f_title" value="${esc(p.title||'')}" placeholder="ชื่อเต็มโครงการ"/>
       </div>
 
-      <div class="section-label">การจ่ายเงิน 3 งวด</div>
-      ${inst.map((i,idx)=>`
-        <div style="display:grid;grid-template-columns:80px 1fr 120px 130px;gap:8px;margin-bottom:8px;align-items:end">
-          <div><label>งวดที่ ${i.no}</label><div style="padding:9px 0;font-weight:600;color:var(--muted)">งวด ${i.no}</div></div>
-          <div><label>จำนวนเงิน (฿)</label>
-            <input id="f_inst${idx}_amt" type="number" value="${i.amount||""}" placeholder="0"/></div>
-          <div><label>จ่ายแล้ว</label>
-            <select id="f_inst${idx}_paid">
-              <option value="false"${!i.paid?" selected":""}>รอจ่าย</option>
-              <option value="true"${i.paid?" selected":""}>จ่ายแล้ว</option>
-            </select></div>
-          <div><label>วันที่จ่าย</label>
-            <input id="f_inst${idx}_date" type="date" value="${i.paidDate||""}"/></div>
-        </div>`).join("")}
+      <div class="field-row">
+        <div class="field"><label>หัวหน้าโครงการ *</label><input id="f_pi" value="${esc(p.pi||'')}" placeholder="ชื่อ นามสกุล วิทยาศาสตร์"/></div>
+        <div class="field"><label>สาขา/สำนัก/คณะ *</label><input id="f_dept" value="${esc(p.dept||'')}" placeholder="เช่น สำนักวิทยาศาสตร์"/></div>
+      </div>
+
+      <div class="field-row3">
+        <div class="field"><label>เบอร์โทรหัวหน้า</label><input id="f_piPhone" value="${esc(p.piPhone||'')}" placeholder="081-234-5678"/></div>
+        <div class="field"><label>อีเมลหัวหน้า</label><input id="f_piEmail" type="email" value="${esc(p.piEmail||'')}" placeholder="name@univ.ac.th"/></div>
+        <div class="field"><label>วงเงินรวม (฿) *</label><input id="f_total" type="number" value="${p.total||''}" placeholder="500000"/></div>
+      </div>
+
+      <div class="field-row">
+        <div class="field"><label>วันทำสัญญา *</label><input id="f_contractDate" type="date" value="${p.contractDate||''}"/></div>
+        <div class="field"><label>ระยะเวลา (เดือน) *</label><input id="f_duration" type="number" value="${p.durationMonths||''}" placeholder="12"/></div>
+      </div>
+
+      <div class="field-row">
+        <div class="field"><label>สถานะ</label>
+          <select id="f_status">${statuses.map(s=>`<option${p.status===s?" selected":""}>${s}</option>`).join("")}</select>
+        </div>
+        <div class="field"><label>กำหนดส่งฉบับแก้ไข</label><input id="f_revision" type="date" value="${p.revisionDeadline||''}"/></div>
+      </div>
+
+      <div class="section-label">งวดการจ่ายเงิน</div>
+      <div class="field-row3">
+        <div class="field"><label>งวดที่ 1 (฿)</label><input id="f_i1" type="number" value="${i1||''}" placeholder="0"/></div>
+        <div class="field"><label>งวดที่ 2 (฿)</label><input id="f_i2" type="number" value="${i2||''}" placeholder="0"/></div>
+        <div class="field"><label>งวดที่ 3 (฿)</label><input id="f_i3" type="number" value="${i3||''}" placeholder="0"/></div>
+      </div>
 
       <div class="section-label">ผู้ประเมิน (สูงสุด 3 ท่าน)</div>
-      <p style="font-size:12px;color:var(--muted);margin:0 0 10px">เลือกจากรายชื่อผู้ใช้งาน role "reviewer" หรือพิมพ์ชื่อเองหากยังไม่มีบัญชี</p>
-      <div id="reviewerList">${renderReviewerFields(revs)}</div>
-      <button class="btn ghost" style="width:100%;margin-top:4px" onclick="addReviewerField()" id="addRevBtn">+ เพิ่มผู้ประเมิน</button>
-
-      <div class="section-label">📎 แนบเอกสาร</div>
-      <div style="background:var(--ivory);border:1px dashed var(--line);border-radius:10px;padding:14px;text-align:center">
-        <input type="file" id="f_files" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"
-          style="display:none" onchange="previewFiles(this)"/>
-        <button class="btn ghost" onclick="document.getElementById('f_files').click()" type="button">
-          📂 เลือกไฟล์
-        </button>
-        <p style="font-size:12px;color:var(--muted);margin:8px 0 0">
-          รองรับ: PDF, Word, Excel, JPG, PNG · สูงสุด <b>5 ไฟล์</b> · ขนาดรวมไม่เกิน <b>25 MB</b><br>
-          <span style="color:var(--amber)">⚠️ ไฟล์จะถูกอัปโหลดไปยัง Google Drive โดยตรง ต้องตั้งค่า Drive Folder ID ใน Config sheet ก่อน</span>
-        </p>
-        <div id="filePreview" style="margin-top:10px;text-align:left"></div>
+      <div class="field-row3">
+        <div class="field"><label>ท่านที่ 1</label><input id="f_r1" value="${esc(r1)}" placeholder="ชื่อ นามสกุล"/></div>
+        <div class="field"><label>ท่านที่ 2</label><input id="f_r2" value="${esc(r2)}" placeholder="ชื่อ นามสกุล"/></div>
+        <div class="field"><label>ท่านที่ 3</label><input id="f_r3" value="${esc(r3)}" placeholder="ชื่อ นามสกุล"/></div>
       </div>
-
     </div>
     <div class="modal-footer">
-      <div id="formErr" style="color:var(--red);font-size:12px;margin-right:auto;align-self:center"></div>
+      <div id="projErr" style="color:var(--red);font-size:12px;margin-right:auto;align-self:center"></div>
       <button class="btn ghost" onclick="closeModal()">ยกเลิก</button>
-      <button class="btn" id="saveProjectBtn" onclick="saveProject('${p.id||""}')">${isEdit?"บันทึกการแก้ไข":"สร้างโครงการ"}</button>
+      <button class="btn" id="saveProjBtn" onclick="saveProject()">${isEdit?"บันทึกการแก้ไข":"สร้างโครงการ"}</button>
     </div>
   </div>`);
 }
 
-function renderReviewerFields(revs){
-  // ดึงรายชื่อ reviewer จาก S.users
-  const reviewerUsers = S.users.filter(u=>u.role==="reviewer");
-  const opts = reviewerUsers.map(u=>`<option value="${esc(u.name)}" data-phone="${esc(u.phone||"")}" data-email="${esc(u.email||"")}">${esc(u.name)}</option>`).join("");
-
-  return revs.map((r,i)=>`
-    <div class="reviewer-card" id="rev_${i}">
-      <div class="rc-head">ผู้ประเมินท่านที่ ${i+1}
-        <button class="btn-icon" onclick="removeReviewer(${i})">✕ ลบ</button>
-      </div>
-      ${reviewerUsers.length ? `
-      <div class="field" style="margin-bottom:8px">
-        <label>เลือกจากรายชื่อ</label>
-        <select onchange="fillReviewerFromUser(this,${i})" style="margin-bottom:6px">
-          <option value="">— เลือก reviewer หรือพิมพ์ด้านล่าง —</option>
-          ${opts}
-        </select>
-      </div>` : ""}
-      <div class="field-row3">
-        <div style="grid-column:span 3"><label>ชื่อ-นามสกุล</label>
-          <input class="rv-name" id="rv_name_${i}" value="${esc(r.name||"")}" placeholder="ศ.ดร. ชื่อ นามสกุล"/></div>
-        <div><label>เบอร์โทร</label><input class="rv-phone" id="rv_phone_${i}" value="${esc(r.phone||"")}" placeholder="081-000-0000"/></div>
-        <div style="grid-column:span 2"><label>อีเมล</label><input class="rv-email" id="rv_email_${i}" value="${esc(r.email||"")}" placeholder="name@univ.ac.th"/></div>
-      </div>
-    </div>`).join("");
-}
-
-function fillReviewerFromUser(sel, idx){
-  if(!sel.value) return;
-  const opt = sel.options[sel.selectedIndex];
-  const nameEl  = document.getElementById(`rv_name_${idx}`);
-  const phoneEl = document.getElementById(`rv_phone_${idx}`);
-  const emailEl = document.getElementById(`rv_email_${idx}`);
-  if(nameEl)  nameEl.value  = sel.value;
-  if(phoneEl) phoneEl.value = opt.dataset.phone || "";
-  if(emailEl) emailEl.value = opt.dataset.email || "";
-}
-
-function previewFiles(input){
-  const files = Array.from(input.files);
-  const MAX_FILES = 5;
-  const MAX_TOTAL_MB = 25;
-  const preview = document.getElementById("filePreview");
-  if(!preview) return;
-  if(files.length > MAX_FILES){
-    preview.innerHTML=`<p style="color:var(--red);font-size:12px">⚠️ เลือกได้สูงสุด ${MAX_FILES} ไฟล์ (เลือกมา ${files.length} ไฟล์)</p>`;
-    input.value=""; return;
-  }
-  const totalMB = files.reduce((s,f)=>s+f.size,0)/1024/1024;
-  if(totalMB > MAX_TOTAL_MB){
-    preview.innerHTML=`<p style="color:var(--red);font-size:12px">⚠️ ขนาดรวมเกิน ${MAX_TOTAL_MB} MB (${totalMB.toFixed(1)} MB)</p>`;
-    input.value=""; return;
-  }
-  preview.innerHTML = files.map(f=>`
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:12px">
-      <span>📄 ${esc(f.name)}</span>
-      <span class="muted">${(f.size/1024/1024).toFixed(2)} MB</span>
-    </div>`).join("")+`<p style="font-size:11px;color:var(--muted);margin:6px 0 0">รวม ${totalMB.toFixed(2)} MB · ${files.length} ไฟล์ — ไฟล์จะถูกส่งพร้อมบันทึกโครงการ</p>`;
-}
-
-function addReviewerField(){
-  const list = document.getElementById("reviewerList");
-  const current = list.querySelectorAll(".reviewer-card").length;
-  if(current >= 3){ alert("เพิ่มผู้ประเมินได้สูงสุด 3 ท่าน"); return; }
-  const html = renderReviewerFields([{name:"",phone:"",email:""}]);
-  // แทนที่ index 0 → index ปัจจุบัน
-  const adjusted = html
-    .replace(/id="rev_0"/g,`id="rev_${current}"`)
-    .replace(/removeReviewer\(0\)/g,`removeReviewer(${current})`)
-    .replace(/fillReviewerFromUser\(this,0\)/g,`fillReviewerFromUser(this,${current})`)
-    .replace(/id="rv_name_0"/g,`id="rv_name_${current}"`)
-    .replace(/id="rv_phone_0"/g,`id="rv_phone_${current}"`)
-    .replace(/id="rv_email_0"/g,`id="rv_email_${current}"`)
-    .replace("ท่านที่ 1",`ท่านที่ ${current+1}`);
-  const div = document.createElement("div");
-  div.innerHTML = adjusted;
-  list.appendChild(div.firstElementChild);
-  if(list.querySelectorAll(".reviewer-card").length >= 3)
-    document.getElementById("addRevBtn").style.display="none";
-}
-
-function removeReviewer(idx){
-  const el = document.getElementById(`rev_${idx}`);
-  if(el) el.remove();
-  document.getElementById("addRevBtn").style.display="";
-  // re-number
-  document.querySelectorAll(".reviewer-card").forEach((c,i)=>{
-    c.id=`rev_${i}`;
-    const h=c.querySelector(".rc-head");
-    h.childNodes[0].textContent=`ผู้ประเมินท่านที่ ${i+1} `;
-    const btn=c.querySelector(".btn-icon");
-    btn.setAttribute("onclick",`removeReviewer(${i})`);
-  });
-}
-
-async function saveProject(existingId){
-  const btn = document.getElementById("saveProjectBtn");
-  const errEl = document.getElementById("formErr");
+// ★ เปลี่ยนที่ 1: saveProject ส่ง projectNo ไปด้วย
+async function saveProject(){
+  const errEl = document.getElementById("projErr");
+  const btn   = document.getElementById("saveProjBtn");
   errEl.textContent = "";
 
-  const title    = document.getElementById("f_title").value.trim();
-  const pi       = document.getElementById("f_pi").value.trim();
-  const year     = Number(document.getElementById("f_year").value);
-  const duration = Number(document.getElementById("f_duration").value);
-  const contract = document.getElementById("f_contract").value;
-  const total    = Number(document.getElementById("f_total").value);
-  const status   = document.getElementById("f_status").value;
-  const piPhone  = document.getElementById("f_phone").value.trim();
-  const piEmail  = document.getElementById("f_email").value.trim();
+  const editId     = document.getElementById("f_editId").value;
+  const projectNo  = document.getElementById("f_projectNo").value.trim();
+  const title      = document.getElementById("f_title").value.trim();
+  const pi         = document.getElementById("f_pi").value.trim();
+  const dept       = document.getElementById("f_dept").value.trim();
+  const budgetYear = Number(document.getElementById("f_year").value);
+  const total      = Number(document.getElementById("f_total").value);
+  const contractDate = document.getElementById("f_contractDate").value;
+  const durationMonths = Number(document.getElementById("f_duration").value);
+  const status     = document.getElementById("f_status").value;
+  const revisionDeadline = document.getElementById("f_revision").value;
+  const piPhone    = document.getElementById("f_piPhone").value.trim();
+  const piEmail    = document.getElementById("f_piEmail").value.trim();
 
-  // Validate
   if(!title){ errEl.textContent="กรุณากรอกชื่อโครงการ"; return; }
-  if(!pi)   { errEl.textContent="กรุณากรอกชื่อหัวหน้าโครงการ"; return; }
-  if(!contract){ errEl.textContent="กรุณาเลือกวันทำสัญญา"; return; }
+  if(!pi){ errEl.textContent="กรุณากรอกชื่อหัวหน้าโครงการ"; return; }
+  if(!dept){ errEl.textContent="กรุณากรอกสาขา/คณะ"; return; }
   if(!total){ errEl.textContent="กรุณากรอกวงเงินรวม"; return; }
+  if(!contractDate){ errEl.textContent="กรุณาเลือกวันทำสัญญา"; return; }
+  if(!durationMonths){ errEl.textContent="กรุณากรอกระยะเวลา"; return; }
 
-  // Installments
-  const installments = [0,1,2].map(idx=>({
-    no: idx+1,
-    amount: Number(document.getElementById(`f_inst${idx}_amt`).value)||0,
-    paid: document.getElementById(`f_inst${idx}_paid`).value==="true",
-    paidDate: document.getElementById(`f_inst${idx}_date`).value||""
-  }));
+  const installments = [
+    {no:1, amount:Number(document.getElementById("f_i1").value)||0, paid:false},
+    {no:2, amount:Number(document.getElementById("f_i2").value)||0, paid:false},
+    {no:3, amount:Number(document.getElementById("f_i3").value)||0, paid:false}
+  ];
 
-  // Reviewers — อ่านจาก id ที่กำหนดใหม่
-  const reviewers = [];
-  document.querySelectorAll(".reviewer-card").forEach((card,i)=>{
-    const nameEl  = document.getElementById(`rv_name_${i}`)  || card.querySelector(".rv-name");
-    const phoneEl = document.getElementById(`rv_phone_${i}`) || card.querySelector(".rv-phone");
-    const emailEl = document.getElementById(`rv_email_${i}`) || card.querySelector(".rv-email");
-    const name = nameEl ? nameEl.value.trim() : "";
-    if(name) reviewers.push({
-      name, status:"รอประเมิน",
-      phone: phoneEl ? phoneEl.value.trim() : "",
-      email: emailEl ? emailEl.value.trim() : ""
-    });
-  });
+  // ถ้าแก้ไข ต้อง preserved สถานะ paid เดิม
+  if(editId){
+    const old = S.projects.find(x=>x.id===editId);
+    if(old && old.installments){
+      old.installments.forEach(oi => {
+        const ni = installments.find(x=>x.no===oi.no);
+        if(ni) ni.paid = oi.paid;
+      });
+    }
+  }
 
-  const payload = { title, pi, piPhone, piEmail, dept:"", budgetYear:year,
-    total, contractDate:contract, durationMonths:duration, status, installments, reviewers };
-  if(existingId) payload.id = existingId;
+  const reviewers = [
+    document.getElementById("f_r1").value.trim(),
+    document.getElementById("f_r2").value.trim(),
+    document.getElementById("f_r3").value.trim()
+  ].filter(n=>n).map(name=>({name}));
 
-  btn.classList.add("saving");
-  btn.textContent = "กำลังบันทึก...";
+  const payload = {
+    projectNo, title, pi, dept, budgetYear, total,
+    contractDate, durationMonths, status, revisionDeadline,
+    piPhone, piEmail, installments, reviewers,
+    _by: S.user.id
+  };
+  if(editId) payload.id = editId;
 
+  btn.classList.add("saving"); btn.textContent="กำลังบันทึก...";
   try {
-    const action = existingId ? "updateProject" : "createProject";
+    const action = editId ? "updateProject" : "createProject";
     const r = await api(action, payload);
-    if(!r.ok){ errEl.textContent = r.error||"บันทึกไม่สำเร็จ"; btn.classList.remove("saving"); btn.textContent=existingId?"บันทึกการแก้ไข":"สร้างโครงการ"; return; }
+    if(!r.ok){
+      errEl.textContent = r.error||"บันทึกไม่สำเร็จ";
+      btn.classList.remove("saving");
+      btn.textContent = editId ? "บันทึกการแก้ไข" : "สร้างโครงการ";
+      return;
+    }
     closeModal();
     await refresh();
+    showToast(editId ? `แก้ไขโครงการ "${title}" แล้ว` : `สร้างโครงการ "${title}" แล้ว (${r.id})`);
   } catch(e){
     errEl.textContent = e.message;
     btn.classList.remove("saving");
-    btn.textContent = existingId?"บันทึกการแก้ไข":"สร้างโครงการ";
+    btn.textContent = editId ? "บันทึกการแก้ไข" : "สร้างโครงการ";
   }
 }
 
-// ======== MODAL: เพิ่ม/แก้ไข ปีงบประมาณ ========
+// ======== การจ่ายเงิน ========
+async function togglePayment(projectId, installmentNo, isPaid){
+  const p = S.projects.find(x=>x.id===projectId);
+  if(!p) return;
+  const inst = (p.installments||[]).find(i=>i.no===installmentNo);
+  if(!inst) return;
+  const newPaid = !isPaid;
+  if(!confirm(newPaid ? `บันทึกจ่ายงวดที่ ${installmentNo} (${fmtBaht(inst.amount)} ฿)?` : `ยกเลิกการจ่ายงวดที่ ${installmentNo}?`)) return;
+  const r = await api("setPayment",{projectId, installmentNo, amount:inst.amount, paid:newPaid});
+  if(r.ok){ await refresh(); openDrawer(projectId); showToast(newPaid?"บันทึกจ่ายแล้ว":"ยกเลิกการจ่ายแล้ว"); }
+  else alert("ไม่สำเร็จ: "+(r.error||""));
+}
+
+// ======== ลบโครงการ ========
+async function confirmDeleteProject(id, title){
+  if(!confirm(`ยืนยันลบโครงการ "${title}" (${id})?\nข้อมูลทุกอย่างจะถูกลบถาวร`)) return;
+  const r = await api("deleteProject",{projectId:id});
+  if(r.ok){ closeDrawer(); await refresh(); showToast(`ลบโครงการ "${title}" แล้ว`); }
+  else alert("ลบไม่สำเร็จ: "+(r.error||""));
+}
+
+// ======== MODAL: เพิ่ม/แก้ไข งบประมาณรายปี ========
 function showAddBudget(existing){
   const b = existing || {};
-  openModal(`<div class="modal" style="max-width:400px">
+  const isEdit = !!b.year;
+  const curYear = new Date().getFullYear() + 543;
+  openModal(`<div class="modal" style="max-width:420px">
     <div class="modal-header">
-      <h2>${b.year?"✎ แก้ไขงบประมาณ":"+ เพิ่มปีงบประมาณ"}</h2>
+      <h2>${isEdit?"✎ แก้ไขปีงบประมาณ":"+ เพิ่มปีงบประมาณ"}</h2>
       <button class="btn ghost" style="padding:6px 12px" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body">
       <div class="field">
         <label>ปีงบประมาณ (พ.ศ.) *</label>
-        <input id="b_year" type="number" value="${b.year||""}" placeholder="2570"
-          ${b.year?"readonly style='background:var(--ivory);color:var(--muted)'":''}/>
+        ${isEdit
+          ? `<input id="b_year" type="number" value="${b.year}" readonly style="background:var(--ivory);color:var(--muted)"/>`
+          : `<input id="b_year" type="number" value="${curYear}" placeholder="${curYear}"/>`}
       </div>
       <div class="field">
-        <label>งบประมาณที่จัดสรร (บาท) *</label>
-        <input id="b_amount" type="number" value="${b.allocated||""}" placeholder="7000000"/>
+        <label>งบประมาณที่จัดสรร (฿) *</label>
+        <input id="b_alloc" type="number" value="${b.allocated||''}" placeholder="5000000"/>
       </div>
-      ${b.year?`
-        <div style="background:var(--ivory);border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:4px">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-            <span class="muted">ผูกพันแล้ว</span><b>${fmtBaht(b.committed)} ฿</b>
-          </div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-            <span class="muted">เบิกจ่ายแล้ว</span><b>${fmtBaht(b.paid)} ฿</b>
-          </div>
-          <div style="display:flex;justify-content:space-between">
-            <span class="muted">คงเหลือ (หลังแก้ไข)</span>
-            <b id="b_remaining" style="color:var(--green)">—</b>
-          </div>
-        </div>`:""}
+      ${isEdit?`<div class="note">โครงการวิจัยในปีนี้: <b>${b.projectCount||0}</b> โครงการ · ผูกพัน <b>${fmtBaht(b.committed)}</b> ฿</div>`:""}
     </div>
     <div class="modal-footer">
       <div id="budgetErr" style="color:var(--red);font-size:12px;margin-right:auto;align-self:center"></div>
+      ${isEdit?`<button class="btn danger" id="delBudgetBtn" onclick="deleteBudgetYear(${b.year})">🗑 ลบปีนี้</button>`:""}
       <button class="btn ghost" onclick="closeModal()">ยกเลิก</button>
-      <button class="btn" id="saveBudgetBtn" onclick="saveBudget(${b.year||0})">${b.year?"บันทึกการแก้ไข":"เพิ่มปีงบประมาณ"}</button>
+      <button class="btn" id="saveBudgetBtn" onclick="saveBudget(${isEdit?b.year:'null'})">${isEdit?"บันทึกการแก้ไข":"เพิ่มปีงบประมาณ"}</button>
     </div>
   </div>`);
-
-  // live preview คงเหลือ
-  if(b.year){
-    document.getElementById("b_amount").addEventListener("input", e=>{
-      const rem = Number(e.target.value||0) - (b.committed||0);
-      const el = document.getElementById("b_remaining");
-      el.textContent = fmtBaht(rem) + " ฿";
-      el.style.color = rem < 0 ? "var(--red)" : "var(--green)";
-    });
-    // trigger ครั้งแรก
-    document.getElementById("b_amount").dispatchEvent(new Event("input"));
-  }
 }
 
 async function saveBudget(existingYear){
-  const btn = document.getElementById("saveBudgetBtn");
   const errEl = document.getElementById("budgetErr");
+  const btn   = document.getElementById("saveBudgetBtn");
   errEl.textContent = "";
-  const year   = Number(document.getElementById("b_year").value);
-  const amount = Number(document.getElementById("b_amount").value);
-  if(!year)  { errEl.textContent="กรุณากรอกปีงบประมาณ"; return; }
-  if(!amount){ errEl.textContent="กรุณากรอกจำนวนงบ"; return; }
+  const budgetYear = Number(document.getElementById("b_year").value);
+  const allocated  = Number(document.getElementById("b_alloc").value);
+  if(!budgetYear){ errEl.textContent="กรุณากรอกปีงบประมาณ"; return; }
+  if(!allocated){ errEl.textContent="กรุณากรอกงบที่จัดสรร"; return; }
   btn.classList.add("saving"); btn.textContent="กำลังบันทึก...";
   try {
-    const r = await api("upsertBudget",{budgetYear:year, allocated:amount});
-    if(!r.ok){ errEl.textContent=r.error||"บันทึกไม่สำเร็จ"; btn.classList.remove("saving"); btn.textContent=existingYear?"บันทึกการแก้ไข":"เพิ่มปีงบประมาณ"; return; }
+    const r = await api("upsertBudget",{budgetYear, allocated});
+    if(!r.ok){ errEl.textContent=r.error||"บันทึกไม่สำเร็จ"; btn.classList.remove("saving"); btn.textContent="บันทึก"; return; }
     closeModal();
-    await refresh();
-  } catch(e){
-    errEl.textContent=e.message;
-    btn.classList.remove("saving");
-    btn.textContent=existingYear?"บันทึกการแก้ไข":"เพิ่มปีงบประมาณ";
-  }
+    const bg = await api("listBudget");
+    S.budget = bg.data||[];
+    render();
+    showToast(`บันทึกงบประมาณปี ${budgetYear} แล้ว`);
+  } catch(e){ errEl.textContent=e.message; btn.classList.remove("saving"); btn.textContent="บันทึก"; }
+}
+
+async function deleteBudgetYear(year){
+  if(!confirm(`ยืนยันลบงบประมาณปี ${year}?\n(ข้อมูลโครงการจะไม่ถูกลบ แต่จะไม่แสดงในสรุปงบประมาณ)`)) return;
+  const r = await api("deleteBudget",{budgetYear:year});
+  if(r.ok){ closeModal(); const bg=await api("listBudget"); S.budget=bg.data||[]; render(); showToast(`ลบงบประมาณปี ${year} แล้ว`); }
+  else alert("ลบไม่สำเร็จ: "+(r.error||""));
 }
 </script>
 </body>

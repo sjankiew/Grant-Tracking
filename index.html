@@ -470,7 +470,7 @@ function openDrawer(id){
   const canE=["admin","staff"].includes(S.user.role);
   
   let extHtml = '';
-  if (canE) {
+  if (p.status === 'รายงานความก้าวหน้าครั้งที่ 1' && canE) {
     const extCount = parseInt(p.extensionCount) || 0;
     const maxExt = parseInt(p.maxExtension) || 3;
     const canExtend = extCount < maxExt;

@@ -378,7 +378,6 @@ function showToast(msg){
   let t=document.getElementById("toast");if(!t){t=document.createElement("div");t.id="toast";t.style.cssText="position:fixed;bottom:24px;right:24px;background:#1F2933;color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;z-index:99;box-shadow:0 4px 16px rgba(0,0,0,.2);transition:opacity .3s";document.body.appendChild(t);}t.textContent=msg;t.style.opacity="1";clearTimeout(t._t);t._t=setTimeout(()=>{t.style.opacity="0";},3000);
 }
 
-/* ==================== OVERVIEW พร้อมกราฟ ==================== */
 function viewOverview(v){
   if(!S.projects.length){v.innerHTML=loading();return;}
   const P=S.projects;
@@ -464,18 +463,17 @@ async function doSubmitReview(projectId,result){
 function resetReviewForm(id){const p=S.projects.find(x=>x.id===id);if(!p)return;const me=S.user.name,rev=(p.reviewers||[]).find(r=>r.name===me);if(rev)rev.status="รอประเมิน";openReviewDrawer(id);}
 
 /* ====================================================================== */
-/* ==================== OPEN DRAWER (แก้ไขตรงนี้) ========================= */
+/* ==================== OPEN DRAWER (มีการขยายเวลา) ======================== */
 /* ====================================================================== */
 function openDrawer(id){
   const p=S.projects.find(x=>x.id===id);if(!p)return;
   const canE=["admin","staff"].includes(S.user.role);
   
-  // ★ สร้าง HTML สำหรับกล่อง "ขยายเวลาจ่ายงวดที่ 2"
   let extHtml = '';
   if (p.status === 'รายงานความก้าวหน้าครั้งที่ 1' && canE) {
-    const extCount = p.extensionCount || 0;
-    const maxExt = p.maxExtension || 3;
-    
+    const extCount = parseInt(p.extensionCount) || 0;
+    const maxExt = parseInt(p.maxExtension) || 3;
+    const canExtend = extCount < maxExt;
     
     extHtml = `
       <div style="background:#FFFBF0;border:1px solid #F0DCB0;border-radius:8px;padding:12px;margin-top:10px;">
@@ -526,7 +524,6 @@ async function extendPaymentTime(projectId, currentExtCount) {
   const p = S.projects.find(x => x.id === projectId);
   if (!p) return;
   
-  // ส่งค่า extensionCount ใหม่ไปเพื่อให้ Backend ทำการอัปเดต
   const payload = {
     id: p.id,
     pi: p.pi,
@@ -538,21 +535,20 @@ async function extendPaymentTime(projectId, currentExtCount) {
     budgetYear: p.budgetYear,
     total: p.total,
     contractDate: p.contractDate,
-    durationMonths: p.baseDurationMonths, // ส่งค่าเดิมกลับไป เพราะ Backend จะคำนวณรวมให้เอง
+    durationMonths: p.baseDurationMonths, 
     status: p.status,
     revisionDeadline: p.revisionDeadline || '',
     extensionCount: newCount,
     _by: S.user.id
   };
   
-  // ต้องส่ง installments และ reviewers ด้วยไม่งั้นมันจะโดนลบทิ้งใน updateProject
   if (p.installments) payload.installments = p.installments;
   if (p.reviewers) payload.reviewers = p.reviewers;
   
   const r = await api("updateProject", payload);
   if (r.ok) {
     await refresh();
-    openDrawer(projectId); // เปิด Drawer ใหม่เพื่ออัปเดต UI ทันที
+    openDrawer(projectId); 
     showToast(`ขยายเวลาสำเร็จ! ระยะเวลารวม ${newCount * 3 + p.baseDurationMonths} เดือน`);
   } else {
     alert("ขยายเวลาไม่สำเร็จ: " + (r.error || ""));
@@ -569,8 +565,6 @@ function showAddProject(existing){
   for(let y=cY-2;y<=cY+3;y++)years.push(y);
   const statuses=["ทำสัญญาแล้ว","รายงานความก้าวหน้าครั้งที่ 1","ส่งเล่มสมบูรณ์","รอการประเมิน","ปิดโครงการ","ยุติโครงการ","รอคืนเงิน"];
   const inst=p.installments||[{}],revs=p.reviewers||[];
-  
-  // ★ เพิ่มตัวแปรสำหรับแสดงผลขยายเวลาตอนแก้ไข
   const extCount = p.extensionCount || 0;
   const baseDuration = p.baseDurationMonths || p.durationMonths || '';
 
@@ -580,7 +574,6 @@ function showAddProject(existing){
     <div class="field"><label>ชื่อโครงการ *</label><input id="f_title" value="${esc(p.title||'')}"/></div>
     <div class="field-row"><div class="field"><label>หัวหน้าโครงการ *</label><input id="f_pi" value="${esc(p.pi||'')}"/></div><div class="field"><label>สาขา/คณะ *</label><input id="f_dept" value="${esc(p.dept||'')}"/></div></div>
     <div class="field-row3"><div class="field"><label>เบอร์โทร</label><input id="f_piPhone" value="${esc(p.piPhone||'')}"/></div><div class="field"><label>อีเมล</label><input id="f_piEmail" type="email" value="${esc(p.piEmail||'')}"/></div><div class="field"><label>วงเงินรวม (฿) *</label><input id="f_total" type="number" value="${p.total||''}"/></div></div>
-    
     <div class="field-row">
       <div class="field"><label>วันทำสัญญา *</label><input id="f_contractDate" type="date" value="${p.contractDate||''}"/></div>
       <div class="field">
@@ -589,12 +582,12 @@ function showAddProject(existing){
         ${isEdit && extCount > 0 ? `<p style="font-size:11px;color:var(--amber);margin:3px 0 0">⚠️ ขยายเวลาไปแล้ว ${extCount} ครั้ง (รวม ${extCount * 3} เดือน) ห้ามแก้ย้อนกลับ</p>` : ''}
       </div>
     </div>
-    
     <div class="field-row"><div class="field"><label>สถานะ</label><select id="f_status">${statuses.map(s=>`<option${p.status===s?" selected":""}>${s}</option>`).join("")}</select></div><div class="field"><label>กำหนดส่งฉบับแก้ไข</label><input id="f_revision" type="date" value="${p.revisionDeadline||''}"/></div></div>
     <div class="section-label">งวดการจ่ายเงิน</div><div class="field-row3"><div class="field"><label>งวดที่ 1 (฿)</label><input id="f_i1" type="number" value="${inst[0]?inst[0].amount:''||''}"/></div><div class="field"><label>งวดที่ 2 (฿)</label><input id="f_i2" type="number" value="${inst[1]?inst[1].amount:''||''}"/></div><div class="field"><label>งวดที่ 3 (฿)</label><input id="f_i3" type="number" value="${inst[2]?inst[2].amount:''||''}"/></div></div>
     <div class="section-label">ผู้ประเมิน (สูงสุด 3)</div><div class="field-row3"><div class="field"><label>ท่านที่ 1</label><input id="f_r1" value="${esc(revs[0]?revs[0].name:'')}"/></div><div class="field"><label>ท่านที่ 2</label><input id="f_r2" value="${esc(revs[1]?revs[1].name:'')}"/></div><div class="field"><label>ท่านที่ 3</label><input id="f_r3" value="${esc(revs[2]?revs[2].name:'')}"/></div></div>
   </div><div class="modal-footer"><div id="projErr" style="color:var(--red);font-size:12px;margin-right:auto;align-self:center"></div><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" id="saveProjBtn" onclick="saveProject()">${isEdit?"บันทึกการแก้ไข":"สร้างโครงการ"}</button></div></div>`);
 }
+
 async function saveProject(){
   const btn=document.getElementById("saveProjBtn"),errEl=document.getElementById("projErr");if(!btn||!errEl)return;errEl.textContent="";
   const editId=document.getElementById("f_editId").value;
@@ -636,7 +629,6 @@ async function saveProject(){
     let r;
     if(editId){
       payload.id=editId;
-      // ★ ตอนบันทึกแก้ไข ต้องส่ง extensionCount ตัวเดิมไปด้วย (ถ้ามี)
       const origP = S.projects.find(x=>x.id===editId);
       if(origP && origP.extensionCount) {
         payload.extensionCount = origP.extensionCount;
@@ -680,6 +672,3 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeModal();closeD
 </script>
 </body>
 </html>
-
-
-

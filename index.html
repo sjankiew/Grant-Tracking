@@ -276,9 +276,7 @@ function viewBudget(v){
   const tC=S.budget.reduce((s,b)=>s+b.committed,0);
   const tPa=S.budget.reduce((s,b)=>s+b.paid,0);
   v.innerHTML=`<div class="grid kpis" style="margin-bottom:16px">${kpi(tP,"โครงการวิจัยทั้งหมด","var(--blue)")}${kpi(fmtBaht(tA)+" ฿","งบจัดสรรรวม")}${kpi(fmtBaht(tC)+" ฿","งบผูกพันรวม","var(--amber)")}${kpi(fmtBaht(tPa)+" ฿","เบิกจ่ายรวม","var(--green)")}</div>
-  <div class="card"><table><thead><tr><th>ปีงบประมาณ</th><th style="text-align:center">จำนวนโครงการ</th><th>จัดสรร</th><th>ผูกพัน</th><th>เบิกจ่าย</th><th>คงเหลือ</th><th style="width:140px">สัดส่วน</th><th></th></tr></thead><tbody>${S.budget.map(b=>{
-    const pct=b.allocated?Math.min(100,Math.round(b.committed/b.allocated*100)):0;
-    return `<tr><td><b>${b.year}</b></td><td style="text-align:center"><span class="badge" style="background:var(--blue);font-size:14px;padding:4px 14px">${b.projectCount||0}</span></td><td>${fmtBaht(b.allocated)}</td><td>${fmtBaht(b.committed)}</td><td>${fmtBaht(b.paid)}</td><td>${fmtBaht(b.remaining)}</td><td><div class="bar"><i style="width:${pct}%"></i></div><span class="muted" style="font-size:11px">${pct}%</span></td><td><button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick='showAddBudget(${JSON.stringify(b)})'>✎</button></td></tr>`;}).join("")}</tbody></table></div>`;
+  <div class="card"><table><thead><tr><th>ปีงบประมาณ</th><th style="text-align:center">จำนวนโครงการ</th><th>จัดสรร</th><th>ผูกพัน</th><th>เบิกจ่าย</th><th>คงเหลือ</th><th style="width:140px">สัดส่วน</th><th></th></tr></thead><tbody>${S.budget.map(b=>{const pct=b.allocated?Math.min(100,Math.round(b.committed/b.allocated*100)):0;return `<tr><td><b>${b.year}</b></td><td style="text-align:center"><span class="badge" style="background:var(--blue);font-size:14px;padding:4px 14px">${b.projectCount||0}</span></td><td>${fmtBaht(b.allocated)}</td><td>${fmtBaht(b.committed)}</td><td>${fmtBaht(b.paid)}</td><td>${fmtBaht(b.remaining)}</td><td><div class="bar"><i style="width:${pct}%"></i></div><span class="muted" style="font-size:11px">${pct}%</span></td><td><button class="btn ghost" style="padding:5px 10px;font-size:12px" onclick='showAddBudget(${JSON.stringify(b)})'>✎</button></td></tr>`;}).join("")}</tbody></table></div>`;
 }
 
 function viewReminders(v){
@@ -308,8 +306,7 @@ function viewEvals(v){
     return `<div class="card" style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:8px;margin-bottom:10px"><div><span style="font-weight:700">${esc(p.id)}</span>${p.projectNo?` <span class="muted" style="font-size:12px">(${esc(p.projectNo)})</span>`:''} <span style="margin:0 6px;color:var(--muted)">—</span><span>${esc(p.title)}</span></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${statusBadge(p.status)}${canUp&&canClose?`<button class="btn green" style="padding:5px 14px;font-size:12px" onclick="closeProjectAfterEval('${p.id}')">✓ ปิดโครงการ</button>`:""}${canUp&&anyRevise&&p.status==="รอการประเมิน"?`<button class="btn amber" style="padding:5px 14px;font-size:12px" onclick="setRevisionDeadline('${p.id}')">✎ กำหนดวันแก้ไข</button>`:""}</div></div>
     ${allDone&&allPassed?`<div style="background:#F0FFF6;border:1px solid var(--green);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--green);margin-bottom:10px">✓ ผู้ประเมินทุกท่านให้ผ่านแล้ว</div>`:""}
     ${anyRevise?`<div style="background:#FFFBF0;border:1px solid var(--amber);border-radius:8px;padding:8px 12px;font-size:12px;color:#7a5b12;margin-bottom:10px">⚠️ มีผู้ประเมินให้แก้ไข</div>`:""}
-    <table><thead><tr><th>ผู้ประเมิน</th><th>สถานะ</th><th>ผล</th><th>หมายเหตุ</th><th>วันที่</th></tr></thead><tbody>${p.reviewers.map(r=>`<tr><td><div style="font-weight:600">${esc(r.name)}</div><div class="muted" style="font-size:11px">${esc(r.email||'')}</div></td><td>${r.status==="ประเมินแล้ว"?`<span class="pill" style="color:var(--green);border-color:var(--green)">✓ ประเมินแล้ว</span>`:`<span class="pill" style="color:var(--amber);border-color:var(--amber)">⏳ รอประเมิน</span>`}</td><td>${r.result?`<span class="pill" style="color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'};border-color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'}">${esc(r.result)}</span>`:'—'}</td><td class="muted" style="font-size:12px">${esc(r.note||'—')}</td><td class="muted" style="font-size:12px">${fmtDate(r.date)}</td></tr>`).join("")}</tbody></table></div>`;
-  }).join("");
+    <table><thead><tr><th>ผู้ประเมิน</th><th>สถานะ</th><th>ผล</th><th>หมายเหตุ</th><th>วันที่</th></tr></thead><tbody>${p.reviewers.map(r=>`<tr><td><div style="font-weight:600">${esc(r.name)}</div><div class="muted" style="font-size:11px">${esc(r.email||'')}</div></td><td>${r.status==="ประเมินแล้ว"?`<span class="pill" style="color:var(--green);border-color:var(--green)">✓ ประเมินแล้ว</span>`:`<span class="pill" style="color:var(--amber);border-color:var(--amber)">⏳ รอประเมิน</span>`}</td><td>${r.result?`<span class="pill" style="color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'};border-color:${r.result==='ผ่าน'?'var(--green)':'var(--amber)'}">${esc(r.result)}</span>`:'—'}</td><td class="muted" style="font-size:12px">${esc(r.note||'—')}</td><td class="muted" style="font-size:12px">${fmtDate(r.date)}</td></tr>`).join("")}</tbody></table></div>`;}).join("");
 }
 
 async function closeProjectAfterEval(id){
@@ -379,32 +376,46 @@ function showToast(msg){
 }
 
 function viewOverview(v){
-  if(!S.projects.length){v.innerHTML=loading();return;}
-  const P=S.projects;
+  const allYears = S.budget.map(b => b.year).sort((a, b) => b - a);
+  const latestYear = allYears.length ? allYears[0] : new Date().getFullYear() + 543;
+  if (!S._overviewYear || !allYears.includes(S._overviewYear)) { S._overviewYear = latestYear; }
+  const selYear = S._overviewYear;
+  const P = S.projects.filter(p => Number(p.budgetYear) === selYear);
+  
+  if(!P.length && !allYears.length){v.innerHTML=loading();return;}
   const byStatus={},byHealth={};
   P.forEach(p=>{byStatus[p.status]=(byStatus[p.status]||0)+1;byHealth[p.health]=(byHealth[p.health]||0)+1;});
-  const tA=S.budget.reduce((s,b)=>s+b.allocated,0),tC=S.budget.reduce((s,b)=>s+b.committed,0),tPa=S.budget.reduce((s,b)=>s+b.paid,0);
+  const bData = S.budget.find(b => b.year === selYear) || {};
+  const tA=bData.allocated||0, tC=bData.committed||0, tPa=bData.paid||0;
+  
   const sClr={"ทำสัญญาแล้ว":"#2B5F8A","รายงานความก้าวหน้าครั้งที่ 1":"#4A90C4","ส่งเล่มสมบูรณ์":"#5B4B8A","รอการประเมิน":"#C98A12","ปิดโครงการ":"#2E7D5B","ยุติโครงการ":"#6B7280","รอคืนเงิน":"#C0392B"};
   const hClr={"ปกติ":"#2E7D5B","ใกล้กำหนด":"#C98A12","ล่าช้า":"#C0392B","เสร็จสิ้น":"#6B7280","แจ้งเตือนแล้ว":"#2B5F8A"};
   const sOrd=["ทำสัญญาแล้ว","รายงานความก้าวหน้าครั้งที่ 1","ส่งเล่มสมบูรณ์","รอการประเมิน","ปิดโครงการ","ยุติโครงการ","รอคืนเงิน"];
   const hOrd=["ปกติ","ใกล้กำหนด","ล่าช้า","เสร็จสิ้น","แจ้งเตือนแล้ว"];
+  const yearOpts = allYears.map(y => `<option value="${y}" ${y===selYear?'selected':''}>${y}</option>`).join("");
 
   v.innerHTML=`
+    <div style="margin-bottom:16px; display:flex; align-items:center; gap:10px;">
+      <label style="margin:0; font-size:14px; color:var(--ink); font-weight:600;">ปีงบประมาณ:</label>
+      <select id="overviewYearFilter" style="width:auto; min-width:120px; padding:8px 12px; font-weight:600; border-radius:8px;" onchange="filterOverviewYear(this.value)">
+        ${yearOpts}
+      </select>
+    </div>
     <div class="grid kpis" style="margin-bottom:16px">
-      ${kpi(P.length,"โครงการทั้งหมด")}
+      ${kpi(P.length,"โครงการในปี " + selYear)}
       ${kpi(P.filter(p=>p.status==="ปิดโครงการ").length,"ปิดโครงการแล้ว","var(--green)")}
       ${kpi(P.filter(p=>p.health==="ล่าช้า").length,"ล่าช้า","var(--red)")}
-      ${kpi(fmtBaht(tA)+" ฿","งบจัดสรรรวม")}
-      ${kpi(fmtBaht(tC)+" ฿","งบผูกพันรวม","var(--amber)")}
-      ${kpi(fmtBaht(tPa)+" ฿","เบิกจ่ายรวม","var(--green)")}
+      ${kpi(fmtBaht(tA)+" ฿","งบจัดสรร")}
+      ${kpi(fmtBaht(tC)+" ฿","งบผูกพัน","var(--amber)")}
+      ${kpi(fmtBaht(tPa)+" ฿","เบิกจ่าย","var(--green)")}
     </div>
     <div class="chart-grid">
       <div class="card"><h3>🥧 สถานะโครงการ</h3><div class="chart-wrap"><canvas id="chSt"></canvas></div></div>
       <div class="card"><h3>💓 สุขภาพโครงการ</h3><div class="chart-wrap"><canvas id="chHl"></canvas></div></div>
-      <div class="card"><h3>📊 งบประมาณรายปี</h3><div class="chart-wrap"><canvas id="chBg"></canvas></div></div>
-      <div class="card"><h3>📈 จำนวนโครงการรายปี</h3><div class="chart-wrap"><canvas id="chCt"></canvas></div></div>
+      <div class="card"><h3>📊 งบประมาณของปี</h3><div class="chart-wrap"><canvas id="chBg"></canvas></div></div>
+      <div class="card"><h3>📈 จำนวนโครงการรายปี (ทุกปี)</h3><div class="chart-wrap"><canvas id="chCt"></canvas></div></div>
     </div>
-    <div class="card"><h3 style="margin-bottom:14px">รายละเอียดสถานะ</h3><table><thead><tr><th>สถานะ</th><th style="text-align:center">จำนวน</th><th style="text-align:center">สัดส่วน</th><th style="width:50%">กราฟ</th></tr></thead><tbody>${(()=>{
+    <div class="card"><h3 style="margin-bottom:14px">รายละเอียดสถานะ (ปี ${selYear})</h3><table><thead><tr><th>สถานะ</th><th style="text-align:center">จำนวน</th><th style="text-align:center">สัดส่วน</th><th style="width:50%">กราฟ</th></tr></thead><tbody>${(()=>{
       const total=P.length||1;
       return sOrd.filter(s=>byStatus[s]).map(s=>{const n=byStatus[s],pct=Math.round(n/total*100);return `<tr><td>${statusBadge(s)}</td><td style="text-align:center;font-weight:700;font-family:'Noto Serif Thai',serif;font-size:16px">${n}</td><td style="text-align:center" class="muted">${pct}%</td><td><div class="bar" style="height:12px"><i style="width:${pct}%;background:${sClr[s]||'#999'};border-radius:999px"></i></div></td></tr>`;}).join("");
     })()}</tbody></table></div>`;
@@ -418,13 +429,24 @@ function viewOverview(v){
     const c2=document.getElementById("chHl");
     if(c2)new Chart(c2,{type:'doughnut',data:{labels:hLbl,datasets:[{data:hD,backgroundColor:hBg,borderColor:'#fff',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:true,cutout:'55%',plugins:{legend:{position:'bottom',labels:{padding:10,font:{family:"'IBM Plex Sans Thai'",size:11},usePointStyle:true,pointStyleWidth:10}},tooltip:{callbacks:{label:c=>` ${c.label}: ${c.raw} โครงการ`}}}}});
 
-    const bLbl=S.budget.map(b=>String(b.year));
     const c3=document.getElementById("chBg");
-    if(c3)new Chart(c3,{type:'bar',data:{labels:bLbl,datasets:[{label:'จัดสรร',data:S.budget.map(b=>b.allocated),backgroundColor:'#2B5F8A',borderRadius:4},{label:'ผูกพัน',data:S.budget.map(b=>b.committed),backgroundColor:'#C98A12',borderRadius:4},{label:'เบิกจ่าย',data:S.budget.map(b=>b.paid),backgroundColor:'#2E7D5B',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:true,scales:{x:{grid:{display:false},ticks:{font:{family:"'IBM Plex Sans Thai'",size:12}}},y:{beginAtZero:true,ticks:{font:{family:"'IBM Plex Sans Thai'",size:11},callback:v=>v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'K':v},grid:{color:'rgba(0,0,0,.06)'}}},plugins:{legend:{position:'top',labels:{padding:12,font:{family:"'IBM Plex Sans Thai'",size:11},usePointStyle:true,pointStyleWidth:10}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fmtBaht(c.raw)} ฿`}}}}});
+    if(c3) {
+      new Chart(c3, {
+        type: 'bar',
+        data: { labels: [String(selYear)], datasets: [{ label: 'จัดสรร', data: [tA], backgroundColor: '#2B5F8A', borderRadius: 4 },{ label: 'ผูกพัน', data: [tC], backgroundColor: '#C98A12', borderRadius: 4 },{ label: 'เบิกจ่าย', data: [tPa], backgroundColor: '#2E7D5B', borderRadius: 4 }] },
+        options: { responsive: true, maintainAspectRatio: true, scales: { x: { grid: { display: false }, ticks: { font: { family: "'IBM Plex Sans Thai'", size: 12 } } }, y: { beginAtZero: true, ticks: { font: { family: "'IBM Plex Sans Thai'", size: 11 }, callback: function(v) { return v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v; } }, grid: { color: 'rgba(0,0,0,.06)' } } }, plugins: { legend: { position: 'top', labels: { padding: 12, font: { family: "'IBM Plex Sans Thai'", size: 11 }, usePointStyle: true, pointStyleWidth: 10 } }, tooltip: { callbacks: { label: function(c) { return ' ' + c.dataset.label + ': ' + fmtBaht(c.raw) + ' ฿'; } } } } }
+      });
+    }
 
+    const bLbl=S.budget.map(b=>String(b.year));
     const c4=document.getElementById("chCt");
-    if(c4)new Chart(c4,{type:'bar',data:{labels:bLbl,datasets:[{label:'จำนวนโครงการ',data:S.budget.map(b=>b.projectCount||0),backgroundColor:'#5B4B8A',borderRadius:6,barThickness:40}]},options:{responsive:true,maintainAspectRatio:true,scales:{x:{grid:{display:false},ticks:{font:{family:"'IBM Plex Sans Thai'",size:12}}},y:{beginAtZero:true,ticks:{stepSize:1,font:{family:"'IBM Plex Sans Thai'",size:11}},grid:{color:'rgba(0,0,0,.06)'}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw} โครงการ`}}}}});
+    if(c4)new Chart(c4,{type:'bar',data:{labels:bLbl,datasets:[{label:'จำนวนโครงการ',data:S.budget.map(b=>b.projectCount||0),backgroundColor:'#5B4B8A',borderRadius:6,barThickness:40}]},options:{responsive:true,maintainAspectRatio:true,scales:{x:{grid:{display:false},ticks:{font:{family:"'IBM Plex Sans Thai'",size:12}}},y:{beginAtZero:true,ticks:{stepSize:1,font:{family:"'IBM Plex Sans Thai'",size:11}},grid:{color:'rgba(0,0,0,.06)'}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw} โครงการ`}}}});
   });
+}
+
+function filterOverviewYear(year) {
+  S._overviewYear = Number(year);
+  render();
 }
 
 function viewMyReviews(v){
@@ -462,9 +484,6 @@ async function doSubmitReview(projectId,result){
 
 function resetReviewForm(id){const p=S.projects.find(x=>x.id===id);if(!p)return;const me=S.user.name,rev=(p.reviewers||[]).find(r=>r.name===me);if(rev)rev.status="รอประเมิน";openReviewDrawer(id);}
 
-/* ====================================================================== */
-/* ==================== OPEN DRAWER (มีการขยายเวลา) ======================== */
-/* ====================================================================== */
 function openDrawer(id){
   const p=S.projects.find(x=>x.id===id);if(!p)return;
   const canE=["admin","staff"].includes(S.user.role);
@@ -474,7 +493,6 @@ function openDrawer(id){
     const extCount = parseInt(p.extensionCount) || 0;
     const maxExt = parseInt(p.maxExtension) || 3;
     const canExtend = extCount < maxExt;
-    
     extHtml = `
       <div style="background:#FFFBF0;border:1px solid #F0DCB0;border-radius:8px;padding:12px;margin-top:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -514,47 +532,17 @@ function openDrawer(id){
   document.getElementById("scrim").classList.remove("hidden");document.getElementById("drawer").classList.remove("hidden");
 }
 
-/* ====================================================================== */
-/* =============== ฟังก์ชันใหม่: ขยายเวลาจ่ายเงินงวดที่ 2 =================== */
-/* ====================================================================== */
 async function extendPaymentTime(projectId, currentExtCount) {
   const newCount = currentExtCount + 1;
   if (!confirm(`ยืนยันขยายเวลาจ่ายเงินงวดที่ 2 ออกไปอีก 3 เดือน (ครั้งที่ ${newCount})?`)) return;
-  
   const p = S.projects.find(x => x.id === projectId);
   if (!p) return;
-  
-  const payload = {
-    id: p.id,
-    pi: p.pi,
-    piPhone: p.piPhone,
-    piEmail: p.piEmail,
-    projectNo: p.projectNo,
-    title: p.title,
-    dept: p.dept,
-    budgetYear: p.budgetYear,
-    total: p.total,
-    contractDate: p.contractDate,
-    durationMonths: p.baseDurationMonths, 
-    status: p.status,
-    revisionDeadline: p.revisionDeadline || '',
-    extensionCount: newCount,
-    _by: S.user.id
-  };
-  
+  const payload = { id: p.id, pi: p.pi, piPhone: p.piPhone, piEmail: p.piEmail, projectNo: p.projectNo, title: p.title, dept: p.dept, budgetYear: p.budgetYear, total: p.total, contractDate: p.contractDate, durationMonths: p.baseDurationMonths, status: p.status, revisionDeadline: p.revisionDeadline || '', extensionCount: newCount, _by: S.user.id };
   if (p.installments) payload.installments = p.installments;
   if (p.reviewers) payload.reviewers = p.reviewers;
-  
   const r = await api("updateProject", payload);
-  if (r.ok) {
-    await refresh();
-    openDrawer(projectId); 
-    showToast(`ขยายเวลาสำเร็จ! ระยะเวลารวม ${newCount * 3 + p.baseDurationMonths} เดือน`);
-  } else {
-    alert("ขยายเวลาไม่สำเร็จ: " + (r.error || ""));
-  }
+  if (r.ok) { await refresh(); openDrawer(projectId); showToast(`ขยายเวลาสำเร็จ! ระยะเวลารวม ${newCount * 3 + p.baseDurationMonths} เดือน`); } else { alert("ขยายเวลาไม่สำเร็จ: " + (r.error || "")); }
 }
-
 
 function closeDrawer(){document.getElementById("scrim").classList.add("hidden");document.getElementById("drawer").classList.add("hidden");}
 function openModal(html){document.getElementById("modal-root").innerHTML=`<div class="modal-backdrop" onclick="if(event.target===this)closeModal()">${html}</div>`;}
@@ -567,21 +555,13 @@ function showAddProject(existing){
   const inst=p.installments||[{}],revs=p.reviewers||[];
   const extCount = p.extensionCount || 0;
   const baseDuration = p.baseDurationMonths || p.durationMonths || '';
-
   openModal(`<div class="modal" style="max-width:640px"><div class="modal-header"><h2>${isEdit?"✎ แก้ไขโครงการ":"+ สร้างโครงการใหม่"}</h2><button class="btn ghost" style="padding:6px 12px" onclick="closeModal()">✕</button></div><div class="modal-body">
     <input type="hidden" id="f_editId" value="${isEdit?esc(p.id):''}"/>
     <div class="field-row"><div class="field"><label>เลขที่โครงการ <span class="muted">(ไม่จำเป็น)</span></label><input id="f_projectNo" value="${esc(p.projectNo||'')}" placeholder="เช่น มทร.สต./1/2567"/><p style="font-size:11px;color:var(--muted);margin:3px 0 0">รหัส RG-… สร้างอัตโนมัติ</p></div><div class="field"><label>ปีงบประมาณ *</label><select id="f_year">${years.map(y=>`<option value="${y}"${Number(p.budgetYear)===y?" selected":""}>${y}</option>`).join("")}</select></div></div>
     <div class="field"><label>ชื่อโครงการ *</label><input id="f_title" value="${esc(p.title||'')}"/></div>
     <div class="field-row"><div class="field"><label>หัวหน้าโครงการ *</label><input id="f_pi" value="${esc(p.pi||'')}"/></div><div class="field"><label>สาขา/คณะ *</label><input id="f_dept" value="${esc(p.dept||'')}"/></div></div>
     <div class="field-row3"><div class="field"><label>เบอร์โทร</label><input id="f_piPhone" value="${esc(p.piPhone||'')}"/></div><div class="field"><label>อีเมล</label><input id="f_piEmail" type="email" value="${esc(p.piEmail||'')}"/></div><div class="field"><label>วงเงินรวม (฿) *</label><input id="f_total" type="number" value="${p.total||''}"/></div></div>
-    <div class="field-row">
-      <div class="field"><label>วันทำสัญญา *</label><input id="f_contractDate" type="date" value="${p.contractDate||''}"/></div>
-      <div class="field">
-        <label>ระยะเวลาเดิม (เดือน) *</label>
-        <input id="f_duration" type="number" value="${baseDuration}"/>
-        ${isEdit && extCount > 0 ? `<p style="font-size:11px;color:var(--amber);margin:3px 0 0">⚠️ ขยายเวลาไปแล้ว ${extCount} ครั้ง (รวม ${extCount * 3} เดือน) ห้ามแก้ย้อนกลับ</p>` : ''}
-      </div>
-    </div>
+    <div class="field-row"><div class="field"><label>วันทำสัญญา *</label><input id="f_contractDate" type="date" value="${p.contractDate||''}"/></div><div class="field"><label>ระยะเวลาเดิม (เดือน) *</label><input id="f_duration" type="number" value="${baseDuration}"/>${isEdit && extCount > 0 ? `<p style="font-size:11px;color:var(--amber);margin:3px 0 0">⚠️ ขยายเวลาไปแล้ว ${extCount} ครั้ง (รวม ${extCount * 3} เดือน) ห้ามแก้ย้อนกลับ</p>` : ''}</div></div>
     <div class="field-row"><div class="field"><label>สถานะ</label><select id="f_status">${statuses.map(s=>`<option${p.status===s?" selected":""}>${s}</option>`).join("")}</select></div><div class="field"><label>กำหนดส่งฉบับแก้ไข</label><input id="f_revision" type="date" value="${p.revisionDeadline||''}"/></div></div>
     <div class="section-label">งวดการจ่ายเงิน</div><div class="field-row3"><div class="field"><label>งวดที่ 1 (฿)</label><input id="f_i1" type="number" value="${inst[0]?inst[0].amount:''||''}"/></div><div class="field"><label>งวดที่ 2 (฿)</label><input id="f_i2" type="number" value="${inst[1]?inst[1].amount:''||''}"/></div><div class="field"><label>งวดที่ 3 (฿)</label><input id="f_i3" type="number" value="${inst[2]?inst[2].amount:''||''}"/></div></div>
     <div class="section-label">ผู้ประเมิน (สูงสุด 3)</div><div class="field-row3"><div class="field"><label>ท่านที่ 1</label><input id="f_r1" value="${esc(revs[0]?revs[0].name:'')}"/></div><div class="field"><label>ท่านที่ 2</label><input id="f_r2" value="${esc(revs[1]?revs[1].name:'')}"/></div><div class="field"><label>ท่านที่ 3</label><input id="f_r3" value="${esc(revs[2]?revs[2].name:'')}"/></div></div>
@@ -630,9 +610,7 @@ async function saveProject(){
     if(editId){
       payload.id=editId;
       const origP = S.projects.find(x=>x.id===editId);
-      if(origP && origP.extensionCount) {
-        payload.extensionCount = origP.extensionCount;
-      }
+      if(origP && origP.extensionCount) { payload.extensionCount = origP.extensionCount; }
       r=await api("updateProject",payload);
     } else {
       r=await api("createProject",payload);

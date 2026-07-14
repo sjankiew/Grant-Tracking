@@ -330,7 +330,7 @@ function openDrawer(id){
   const p=S.projects.find(x=>x.id===id);if(!p)return;
   const canE=["admin","staff"].includes(S.user.role);
   let extHtml = '';
-  if (p.status === 'รายงงานความก้าวหน้าครั้งที่ 1' && canE) {
+  if (p.status === 'รายงานความก้าวหน้าครั้งที่ 1' && canE) {
     const extCount = parseInt(p.extensionCount) || 0;
     const maxExt = parseInt(p.maxExtension) || 3;
     const canExtend = extCount < maxExt;

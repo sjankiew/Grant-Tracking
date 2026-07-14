@@ -133,11 +133,21 @@ function cacheClear(){ _cache={}; }
 async function api(action, payload={}, useCache=false) {
   const cacheKey = action + JSON.stringify(payload);
   if(useCache){ const hit = cacheGet(cacheKey); if(hit) return hit; }
+  
   const url = new URL(API_URL);
-  url.searchParams.set("action", action);
-  url.searchParams.set("token", S.token||"");
-  url.searchParams.set("payload", JSON.stringify(payload));
-  const res = await fetch(url.toString(), { method:"GET", redirect:"follow" });
+  
+  // เปลี่ยนเป็นวิธี POST เพื่อรองรับ Payload ขนาดใหญ่ (ไฟล์ Base64)
+  const res = await fetch(url.toString(), { 
+    method: "POST", 
+    redirect: "follow",
+    headers: { "Content-Type": "text/plain;charset=utf-8" }, // ใช้ text/plain เพื่อเลี่ยงปัญหา CORS
+    body: JSON.stringify({ 
+      action: action, 
+      token: S.token || "", 
+      payload: payload 
+    })
+  });
+  
   const data = await res.json();
   if(data.ok===false && data.error==="unauthorized"){ logout(); throw new Error("เซสชันหมดอายุ"); }
   if(useCache && data.ok) cacheSet(cacheKey, data);

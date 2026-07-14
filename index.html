@@ -102,6 +102,13 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbxW2HESXQGHsqEA4CdVXm-w6kye1d1RrvwEWsVYysY7TwB4iE2Mgqve_1KXj2GQF6VX/exec";
 let S = { user:null, token:null, projects:[], budget:[], due:[], users:[], page:"dash" };
 
+const MENUS = {
+  admin:[["dash","Dashboard"],["projects","โครงการวิจัย"],["budget","งบประมาณรายปี"],["reminders","การติดตาม/แจ้งเตือน"],["evals","การประเมิน"],["users","จัดการผู้ใช้"]],
+  staff:[["dash","Dashboard"],["projects","โครงการวิจัย"],["budget","งบประมาณรายปี"],["reminders","การติดตาม/แจ้งเตือน"],["evals","การประเมิน"]],
+  dean:[["overview","ภาพรวมผู้บริหาร"]],
+  reviewer:[["myreviews","งานประเมินของฉัน"]]
+};
+
 const fmtBaht = n => Number(n||0).toLocaleString("th-TH",{maximumFractionDigits:0});
 const fmtDate = s => s ? new Date(s).toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"numeric"}) : "—";
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
@@ -133,14 +140,6 @@ async function api(action, payload={}, useCache=false) {
 }
 
 function quick(id){ document.getElementById("uid").value=id; document.getElementById("pwd").value="1234"; doLogin(); }
-
-
-const MENUS = {
-  admin:[["dash","Dashboard"],["projects","โครงการวิจัย"],["budget","งบประมาณรายปี"],["reminders","การติดตาม/แจ้งเตือน"],["evals","การประเมิน"],["users","จัดการผู้ใช้"]],
-  staff:[["dash","Dashboard"],["projects","โครงการวิจัย"],["budget","งบประมาณรายปี"],["reminders","การติดตาม/แจ้งเตือน"],["evals","การประเมิน"]],
-  dean:[["overview","ภาพรวมผู้บริหาร"]],
-  reviewer:[["myreviews","งานประเมินของฉัน"]]
-};
 
 async function doLogin(){
   const errEl = document.getElementById("loginerr"); errEl.textContent = "";

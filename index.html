@@ -341,8 +341,10 @@ function openDrawer(id){
     '<div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="flex:1;min-width:0"><h2 style="font-size:17px;color:var(--oxblood);line-height:1.4">'+esc(p.title)+'</h2><div><span class="muted">'+esc(p.id)+'</span>'+(p.projectNo?' <span style="font-weight:600;color:var(--ink)">· '+esc(p.projectNo)+'</span>':'')+' <span class="muted">· '+esc(p.dept)+'</span></div></div><div style="display:flex;gap:6px;flex-shrink:0">'+(canE?'<button class="btn" style="padding:7px 12px;font-size:13px" onclick="closeDrawer();showAddProject(S.projects.find(x=>x.id===\''+p.id+'\'))">✎ แก้ไข</button><button class="btn danger" style="padding:7px 12px;font-size:13px" onclick="confirmDeleteProject(\''+p.id+'\',\''+esc(p.title).replace(/'/g,"\\'")+'\')">🗑</button>':'')+'<button class="btn ghost" style="padding:7px 12px;font-size:13px" onclick="closeDrawer()">✕</button></div></div><div style="margin-top:10px">'+statusBadge(p.status)+' '+healthBadge(p.health)+'</div><div class="sect"><h3>ข้อมูลหัวหน้าโครงการ</h3><div><b>'+esc(p.pi)+'</b></div><div class="muted"><a href="tel:'+esc(p.piPhone)+'">'+esc(p.piPhone)+'</a> · <a href="mailto:'+esc(p.piEmail)+'">'+esc(p.piEmail)+'</a></div><div class="row2" style="margin-top:8px"><div><label>ปีงบประมาณ</label>'+p.budgetYear+'</div><div><label>ระยะเวลารวม</label>'+p.durationMonths+' เดือน</div><div><label>วันทำสัญญา</label>'+fmtDate(p.contractDate)+'</div><div><label>วงเงินรวม</label>'+fmtBaht(p.total)+' ฿</div></div></div>'+(p.milestone?'<div class="note" style="margin-top:10px">⏰ '+esc(p.milestone.label)+' — '+fmtDate(p.milestone.date)+' (เหลือ '+p.milestone.daysLeft+' วัน)</div>':'')+'</div>'+extHtml+'<div class="sect"><h3>การจ่ายเงิน</h3><table><tbody>'+(p.installments||[]).map(i=>'<tr><td>งวดที่ '+i.no+'</td><td>'+fmtBaht(i.amount)+' ฿</td><td>'+(i.paid?'<span class="pill" style="color:var(--green);border-color:var(--green)">จ่ายแล้ว '+fmtDate(i.paidDate)+'</span>':'<span class="pill">รอจ่าย</span>')+'</td>'+(canE?'<td><button class="btn ghost" style="padding:4px 9px;font-size:11px" onclick="togglePayment(\''+p.id+'\','+i.no+','+i.paid+')">'+(i.paid?"ยกเลิก":"✓ บันทึกจ่าย")+'</button></td>':'<td></td>')+'</tr>').join("")+'</tbody></table><div class="muted" style="margin-top:6px">เบิกจ่ายแล้ว '+fmtBaht(p.paid)+' / คงเหลือ '+fmtBaht(p.remaining)+' ฿</div></div>'+
     (p.refund ? '<div class="sect"><h3>การคืนเงิน</h3><div class="row2"><div><label>จำนวนที่ต้องคืน</label>'+fmtBaht(p.refund.required)+' ฿</div><div><label>คืนแล้ว</label>'+fmtBaht(p.refund.returned)+' ฿</div></div><div><label>กำหนดคืน</label>'+fmtDate(p.refund.deadline)+'</div></div>' : '') +
     ((p.reviewers||[]).length ? '<div class="sect"><h3>ผู้ประเมิน</h3><table><thead><tr><th>ผู้ประเมิน</th><th>สถานะ</th><th>ผล</th><th>หมายเหตุ</th></tr></thead><tbody>'+p.reviewers.map(r=>'<tr><td><div style="font-weight:600">'+esc(r.name)+'</div></td><td>'+(r.status==="ประเมินแล้ว"?'<span class="pill" style="color:var(--green);border-color:var(--green)">✓</span>':'<span class="pill" style="color:var(--amber);border-color:var(--amber)">⏳ รอประเมิน</span>')+'</td><td>'+(r.result?'<span class="pill" style="color:'+(r.result==='ผ่าน'?'var(--green)':'var(--amber)')+';border-color:'+(r.result==='ผ่าน'?'var(--green)':'var(--amber)')+'">'+esc(r.result)+'</span>':'—')+'</td><td class="muted" style="font-size:12px">'+esc(r.note||'—')+'</td></tr>').join("")+'</tbody></table></div>' : '') +
-    ((p.attachments||[]).length ? '<div class="sect"><h3>เอกสารแนบ</h3>' + p.attachments.map(a=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)"><span>📄 '+esc(a.name)+'</span><div style="display:flex;align-items:center;gap:8px"><span class="muted" style="font-size:12px">'+fmtDate(a.date)+'</span>'+(a.driveFileId?'<a href="https://drive.google.com/file/d/'+esc(a.driveFileId)+'/view" target="_blank" class="btn" style="padding:4px 10px;font-size:12px;text-decoration:none">เปิด</a>':'')+'</div></div>').join("") + '</div>' : '<div class="sect"><h3>เอกสารแนบ</h3><p class="muted">ยังไม่มีเอกสารแนบ</p></div>') +
-    '</div>';
+    ((p.attachments||[]).length ? '<div class="sect"><h3>เอกสารแนบ</h3>' +
+    (canE ? '<div style="margin-bottom:10px;display:flex;gap:8px;"><input type="file" id="d_file_'+p.id+'" style="flex:1;font-size:12px;padding:6px"/><button class="btn" style="font-size:12px;padding:6px 12px;white-space:nowrap;" onclick="uploadFromDrawer(\''+p.id+'\')">⬆️ อัปโหลดเพิ่ม</button></div>' : '') +
+    ((p.attachments||[]).length ? p.attachments.map(a=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)"><span>📄 '+esc(a.name)+'</span><div style="display:flex;align-items:center;gap:8px"><span class="muted" style="font-size:12px">'+fmtDate(a.date)+'</span>'+(a.driveFileId?'<a href="https://drive.google.com/file/d/'+esc(a.driveFileId)+'/view" target="_blank" class="btn" style="padding:4px 10px;font-size:12px;text-decoration:none">เปิด</a>':'')+'</div></div>').join("") : '<p class="muted">ยังไม่มีเอกสารแนบ</p>') +
+    '</div></div>';
 
   document.getElementById("scrim").classList.remove("hidden");document.getElementById("drawer").classList.remove("hidden");
 }
@@ -359,6 +361,32 @@ async function extendPaymentTime(projectId, currentExtCount) {
   if (r.ok) { await refresh(); openDrawer(projectId); showToast('ขยายเวลาสำเร็จ! ระยะเวลารวม '+(newCount * 3 + p.baseDurationMonths)+' เดือน'); } else { alert("ขยายเวลาไม่สำเร็จ: " + (r.error || "")); }
 }
 
+function uploadFromDrawer(pid) {
+  const input = document.getElementById("d_file_" + pid);
+  const file = input.files[0];
+  if (!file) return alert("กรุณาเลือกไฟล์ที่ต้องการอัปโหลดก่อน");
+  
+  const btn = input.nextElementSibling;
+  btn.textContent = "กำลังอัปโหลด..."; 
+  btn.disabled = true;
+  
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const base64 = e.target.result;
+    const r = await api("uploadFile", { projectId: pid, fileName: file.name, mimeType: file.type, base64: base64 });
+    if (r.ok) { 
+      await refresh(); 
+      openDrawer(pid); // โหลด Drawer หน้าเดิมขึ้นมาใหม่
+      showToast("อัปโหลดเอกสารเข้าโปรเจกต์เรียบร้อย"); 
+    } else { 
+      alert("อัปโหลดไม่สำเร็จ: " + (r.error || "")); 
+      btn.textContent = "⬆️ อัปโหลดเพิ่ม"; 
+      btn.disabled = false; 
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
 function closeDrawer(){document.getElementById("scrim").classList.add("hidden");document.getElementById("drawer").classList.add("hidden");}
 function openModal(html){document.getElementById("modal-root").innerHTML='<div class="modal-backdrop" onclick="if(event.target===this)closeModal()">'+html+'</div>';}
 function closeModal(){document.getElementById("modal-root").innerHTML="";}
@@ -370,7 +398,7 @@ function showAddProject(existing){
   const inst=p.installments||[{}],revs=p.reviewers||[];
   const extCount = p.extensionCount || 0;
   const baseDuration = p.baseDurationMonths || p.durationMonths || '';
-  openModal('<div class="modal" style="max-width:640px"><div class="modal-header"><h2>'+(isEdit?"✎ แก้ไขโครงการ":"+ สร้างโครงการใหม่")+'</h2><button class="btn ghost" style="padding:6px 12px" onclick="closeModal()">✕</button></div><div class="modal-body"><input type="hidden" id="f_editId" value="'+(isEdit?esc(p.id):'')+'"/><div class="field-row"><div class="field"><label>เลขที่โครงการ <span class="muted">(ไม่จำเป็น)</span></label><input id="f_projectNo" value="'+esc(p.projectNo||'')+'" placeholder="เช่น มทร.สต./1/2567"/><p style="font-size:11px;color:var(--muted);margin:3px 0 0">รหัส RG-… สร้างอัตโนมัติ</p></div><div class="field"><label>ปีงบประมาณ *</label><select id="f_year">'+years.map(y=>'<option value="'+y+'"'+(Number(p.budgetYear)===y?" selected":"")+'>'+y+'</option>').join("")+'</select></div></div><div class="field"><label>ชื่อโครงการ *</label><input id="f_title" value="'+esc(p.title||'')+'"/></div><div class="field-row"><div class="field"><label>หัวหน้าโครงการ *</label><input id="f_pi" value="'+esc(p.pi||'')+'"/></div><div class="field"><label>สาขา/คณะ *</label><input id="f_dept" value="'+esc(p.dept||'')+'"/></div></div><div class="field-row3"><div class="field"><label>เบอร์โทร</label><input id="f_piPhone" value="'+esc(p.piPhone||'')+'"/></div><div class="field"><label>อีเมล</label><input id="f_piEmail" type="email" value="'+esc(p.piEmail||'')+'"/></div><div class="field"><label>วงเงินรวม (฿) *</label><input id="f_total" type="number" value="'+(p.total||'')+'"/></div></div><div class="field-row"><div class="field"><label>วันทำสัญญา *</label><input id="f_contractDate" type="date" value="'+(p.contractDate||'')+'"/></div><div class="field"><label>ระยะเวลาเดิม (เดือน) *</label><input id="f_duration" type="number" value="'+baseDuration+'"/>'+(isEdit && extCount > 0 ? '<p style="font-size:11px;color:var(--amber);margin:3px 0 0">⚠️ ขยายเวลาไปแล้ว '+extCount+' ครั้ง (รวม '+extCount*3+' เดือน) ห้ามแก้ย้อนกลับ</p>':'')+'</div></div><div class="field-row"><div class="field"><label>สถานะ</label><select id="f_status">'+statuses.map(s=>'<option'+(p.status===s?" selected":"")+">"+s+'</option>').join("")+'</select></div><div class="field"><label>กำหนดส่งฉบับแก้ไข</label><input id="f_revision" type="date" value="'+(p.revisionDeadline||'')+'"/></div></div><div class="section-label">งวดการจ่ายเงิน</div><div class="field-row3"><div class="field"><label>งวดที่ 1 (฿)</label><input id="f_i1" type="number" value="'+(inst[0]?inst[0].amount:'')+'"/></div><div class="field"><label>งวดที่ 2 (฿)</label><input id="f_i2" type="number" value="'+(inst[1]?inst[1].amount:'')+'"/></div><div class="field"><label>งวดที่ 3 (฿)</label><input id="f_i3" type="number" value="'+(inst[2]?inst[2].amount:'')+'"/></div></div><div class="section-label">ผู้ประเมิน (สูงสุด 3 ท่าน)</div><div class="field-row3"><div class="field"><label>ท่านที่ 1</label><input id="f_r1" value="'+esc(revs[0]?revs[0].name:'')+'"/></div><div class="field"><label>ท่านที่ 2</label><input id="f_r2" value="'+esc(revs[1]?revs[1].name:'')+'"/></div><div class="field"><label>ท่านที่ 3</label><input id="f_r3" value="'+esc(revs[2]?revs[2].name:'')+'"/></div></div></div><div class="modal-footer"><div id="projErr" style="color:var(--red);font-size:12px;margin-right:auto;align-self:center"></div><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" id="saveProjBtn" onclick="saveProject()">'+(isEdit?"บันทึกการแก้ไข":"สร้างโครงการ")+'</button></div></div>');
+  openModal('<div class="modal" style="max-width:640px"><div class="modal-header"><h2>'+(isEdit?"✎ แก้ไขโครงการ":"+ สร้างโครงการใหม่")+'</h2><button class="btn ghost" style="padding:6px 12px" onclick="closeModal()">✕</button></div><div class="modal-body"><input type="hidden" id="f_editId" value="'+(isEdit?esc(p.id):'')+'"/><div class="field-row"><div class="field"><label>เลขที่โครงการ <span class="muted">(ไม่จำเป็น)</span></label><input id="f_projectNo" value="'+esc(p.projectNo||'')+'" placeholder="เช่น มทร.สต./1/2567"/><p style="font-size:11px;color:var(--muted);margin:3px 0 0">รหัส RG-… สร้างอัตโนมัติ</p></div><div class="field"><label>ปีงบประมาณ *</label><select id="f_year">'+years.map(y=>'<option value="'+y+'"'+(Number(p.budgetYear)===y?" selected":"")+'>'+y+'</option>').join("")+'</select></div></div><div class="field"><label>ชื่อโครงการ *</label><input id="f_title" value="'+esc(p.title||'')+'"/></div><div class="field-row"><div class="field"><label>หัวหน้าโครงการ *</label><input id="f_pi" value="'+esc(p.pi||'')+'"/></div><div class="field"><label>สาขา/คณะ *</label><input id="f_dept" value="'+esc(p.dept||'')+'"/></div></div><div class="field-row3"><div class="field"><label>เบอร์โทร</label><input id="f_piPhone" value="'+esc(p.piPhone||'')+'"/></div><div class="field"><label>อีเมล</label><input id="f_piEmail" type="email" value="'+esc(p.piEmail||'')+'"/></div><div class="field"><label>วงเงินรวม (฿) *</label><input id="f_total" type="number" value="'+(p.total||'')+'"/></div></div><div class="field-row"><div class="field"><label>วันทำสัญญา *</label><input id="f_contractDate" type="date" value="'+(p.contractDate||'')+'"/></div><div class="field"><label>ระยะเวลาเดิม (เดือน) *</label><input id="f_duration" type="number" value="'+baseDuration+'"/>'+(isEdit && extCount > 0 ? '<p style="font-size:11px;color:var(--amber);margin:3px 0 0">⚠️ ขยายเวลาไปแล้ว '+extCount+' ครั้ง (รวม '+extCount*3+' เดือน) ห้ามแก้ย้อนกลับ</p>':'')+'</div></div><div class="field-row"><div class="field"><label>สถานะ</label><select id="f_status">'+statuses.map(s=>'<option'+(p.status===s?" selected":"")+">"+s+'</option>').join("")+'</select></div><div class="field"><label>กำหนดส่งฉบับแก้ไข</label><input id="f_revision" type="date" value="'+(p.revisionDeadline||'')+'"/></div></div><div class="section-label">งวดการจ่ายเงิน</div><div class="field-row3"><div class="field"><label>งวดที่ 1 (฿)</label><input id="f_i1" type="number" value="'+(inst[0]?inst[0].amount:'')+'"/></div><div class="field"><label>งวดที่ 2 (฿)</label><input id="f_i2" type="number" value="'+(inst[1]?inst[1].amount:'')+'"/></div><div class="field"><label>งวดที่ 3 (฿)</label><input id="f_i3" type="number" value="'+(inst[2]?inst[2].amount:'')+'"/></div></div><div class="section-label">ผู้ประเมิน (สูงสุด 3 ท่าน)</div><div class="field-row3"><div class="field"><label>ท่านที่ 1</label><input id="f_r1" value="'+esc(revs[0]?revs[0].name:'')+'"/></div><div class="field"><label>ท่านที่ 2</label><input id="f_r2" value="'+esc(revs[1]?revs[1].name:'')+'"/></div><div class="field"><label>ท่านที่ 3</label><input id="f_r3" value="'+esc(revs[2]?revs[2].name:'')+'"/></div></div></div><div class="field"><input type="file" id="f_file" style="font-size:12px;"/></div><div class="modal-footer"><div id="projErr" style="color:var(--red);font-size:12px;margin-right:auto;align-self:center"></div><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" id="saveProjBtn" onclick="saveProject()">'+(isEdit?"บันทึกการแก้ไข":"สร้างโครงการ")+'</button></div></div>');
 }
 
 async function saveProject(){
@@ -405,6 +433,10 @@ async function saveProject(){
   if(r2)reviewers.push({name:r2,phone:'',email:'',status:'รอประเมิน',result:'',note:'',date:null});
   if(r3)reviewers.push({name:r3,phone:'',email:'',status:'รอประเมิน',result:'',note:'',date:null});
   const payload={projectNo,title,pi,piPhone,piEmail,dept,budgetYear:year,total,contractDate,durationMonths,status,revisionDeadline,installments,reviewers,_by:S.user.id};
+  // (โค้ดเดิมด้านบนเหมือนเดิมจนถึงบรรทัด btn.classList.add("saving");)
+  const fileInput = document.getElementById("f_file");
+  const file = fileInput ? fileInput.files[0] : null;
+
   btn.classList.add("saving");btn.textContent="กำลังบันทึก...";
   try{
     let r;
@@ -416,7 +448,24 @@ async function saveProject(){
     } else {
       r=await api("createProject",payload);
     }
+    
     if(!r.ok){errEl.textContent=r.error||"บันทึกไม่สำเร็จ";btn.classList.remove("saving");btn.textContent=editId?"บันทึกการแก้ไข":"สร้างโครงการ";return;}
+    
+    // ★ ส่วนจัดการอัปโหลดไฟล์เมื่อมีไฟล์ถูกเลือก
+    if (file) {
+      const pid = editId || r.id; // ใช้ ID เดิม หรือ ID ใหม่ที่เพิ่งสร้าง
+      btn.textContent = "กำลังอัปโหลดเอกสาร...";
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        const base64 = e.target.result;
+        const up = await api("uploadFile", { projectId: pid, fileName: file.name, mimeType: file.type, base64: base64 });
+        if (!up.ok) alert("สร้างโครงการแล้ว แต่อัปโหลดเอกสารไม่สำเร็จ: " + up.error);
+        closeModal(); await refresh(); showToast(editId?"แก้ไขและแนบไฟล์แล้ว":"สร้างโครงการและแนบไฟล์แล้ว");
+      };
+      reader.readAsDataURL(file);
+      return; // สั่งจบการทำงานตรงนี้ ปล่อยให้ reader จัดการต่อ
+    }
+    
     closeModal();await refresh();showToast(editId?"แก้ไขโครงการแล้ว":"สร้างโครงการใหม่แล้ว");
   }catch(e){errEl.textContent=e.message;btn.classList.remove("saving");btn.textContent=editId?"บันทึกการแก้ไข":"สร้างโครงการ";}
 }

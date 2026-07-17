@@ -270,12 +270,28 @@ async function saveTracking(projectId){
 }
 
 async function saveUser(existingId){
-  const btn=document.getElementById("saveUserBtn"),errEl=document.getElementById("userErr");if(!btn||!errEl)return;errEl.textContent="";
-  const idInput=document.getElementById("u_id"),id=existingId||(idInput?idInput.value.trim():""),name=document.getElementById("u_name").value.trim(),role=document.getElementById("u_role").value,phone=document.getElementById("u_phone").value.trim(),email=document.getElementById("u_email").value.trim(),pwd=document.getElementById("u_pwd").value,sel=document.getElementById("u_role"),roleLabel=sel.options[sel.selectedIndex].dataset.label||role;
-  if(!id){errEl.textContent="กรุณากรอกรหัสผู้ใช้";return;}if(id.includes(" ")){errEl.textContent="รหัสผู้ใช้ต้องไม่มีช่องว่าง";return;}if(!name){errEl.textContent="กรุณากรอกชื่อ-นามสกุล";return;}if(!existingId&&!pwd){errEl.textContent="กรุณากรอกรหัสผ่าน";return;}
-  const payload={id,name,role,roleLabel,phone,email};if(pwd)payload.password=pwd;
-  btn.classList.add("saving");btn.textContent="กำลังบันทึก...";
-  try{const r=await api("upsertUser",payload);if(!r.ok){errEl.textContent=r.error||"บันทึกไม่สำเร็จ";btn.classList.remove("saving");btn.textContent=existingId?"บันทึกการแก้ไข":"เพิ่มผู้ใช้งาน";return;}closeModal();const ru=await api("listUsers");S.users=ru.data||[];viewUsers(document.getElementById("view"));showToast(existingId?'แก้ไข "'+name+'" แล้ว':'เพิ่ม "'+name+'" ('+id+') แล้ว');}catch(e){if(errEl)errEl.textContent=e.message;btn.classList.remove("saving");btn.textContent=existingId?"บันทึกการแก้ไข":"เพิ่มผู้ใช้งาน";}
+ const btn=document.getElementById("saveUserBtn"),errEl=document.getElementById("userErr");if(!btn||!errEl)return;errEl.textContent="";
+ const idInput=document.getElementById("u_id"),id=existingId||(idInput?idInput.value.trim():""),name=document.getElementById("u_name").value.trim(),role=document.getElementById("u_role").value,phone=document.getElementById("u_phone").value.trim(),email=document.getElementById("u_email").value.trim(),pwd=document.getElementById("u_pwd").value,sel=document.getElementById("u_role"),roleLabel=sel.options[sel.selectedIndex].dataset.label||role;
+ if(!id){errEl.textContent="กรุณากรอกรหัสผู้ใช้";return;}if(id.includes(" ")){errEl.textContent="รหัสผู้ใช้ต้องไม่มีช่องว่าง";return;}if(!name){errEl.textContent="กรุณากรอกชื่อ-นามสกุล";return;}if(!existingId&&!pwd){errEl.textContent="กรุณากรอกรหัสผ่าน";return;}
+ const payload={id,name,role,roleLabel,phone,email};if(pwd)payload.password=pwd;
+ btn.classList.add("saving");btn.textContent="กำลังบันทึก...";
+ 
+ try{
+  const r=await api("upsertUser",payload);
+  if(!r.ok){
+   errEl.textContent=r.error||"บันทึกไม่สำเร็จ";
+   btn.classList.remove("saving");
+   btn.textContent=existingId?"บันทึกการแก้ไข":"เพิ่มผู้ใช้งาน";
+   return;
+  }
+  closeModal();
+  await refresh(); // สั่งรีเฟรชข้อมูลทั้งหมดใหม่ให้ตรงกับ Sheet หลังจากบันทึกเสร็จ
+  showToast(existingId?'แก้ไข "'+name+'" แล้ว':'เพิ่ม "'+name+'" ('+id+') แล้ว');
+ }catch(e){
+  if(errEl)errEl.textContent=e.message;
+  btn.classList.remove("saving");
+  btn.textContent=existingId?"บันทึกการแก้ไข":"เพิ่มผู้ใช้งาน";
+ }
 }
 
 async function deleteUser(userId,userName){ if(userId===S.user.id){alert("ไม่สามารถลบบัญชีของตัวเองได้");return;}if(!confirm('ยืนยันลบ "'+userName+'" ('+userId+')?'))return; const r=await api("deleteUser",{userId});if(r.ok){const ru=await api("listUsers");S.users=ru.data||[];viewUsers(document.getElementById("view"));showToast('ลบ "'+userName+'" แล้ว');}else alert("ลบไม่สำเร็จ: "+(r.error||"")); }

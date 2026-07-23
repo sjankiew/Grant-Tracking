@@ -423,8 +423,14 @@ function openModal(html){document.getElementById("modal-root").innerHTML='<div c
 function closeModal(){document.getElementById("modal-root").innerHTML="";}
 
 function showAddProject(existing){
- const p=existing||{},isEdit=!!p.id,cY=new Date().getFullYear()+543,years=[];
- for(let y=cY-2;y<=cY+3;y++)years.push(y);
+ const p=existing||{},isEdit=!!p.id;
+ 
+ // ดึงปีงบประมาณจากฐานข้อมูล (S.budget) มาใช้เป็น Dropdown
+ let years = S.budget.map(b => Number(b.year));
+ if (p.budgetYear && !years.includes(Number(p.budgetYear))) years.push(Number(p.budgetYear)); // เผื่อกรณีแก้ไขโครงการเก่าที่ปีไม่มีในระบบแล้ว
+ if (years.length === 0) years.push(new Date().getFullYear() + 543);
+ years.sort((a, b) => b - a); // เรียงจากปีล่าสุดลงไป
+
  const statuses=["ทำสัญญาแล้ว","รายงานความก้าวหน้าครั้งที่ 1","ส่งเล่มสมบูรณ์","รอการประเมิน","ปิดโครงการ","ยุติโครงการ","รอคืนเงิน"];
  const inst=p.installments||[{}],revs=p.reviewers||[];
  const extCount = p.extensionCount || 0;
@@ -436,6 +442,7 @@ function showAddProject(existing){
 
  openModal('<div class="modal" style="max-width:640px"><div class="modal-header"><h2>'+(isEdit?"✎ แก้ไขโครงการ":"+ สร้างโครงการใหม่")+'</h2><button class="btn ghost" style="padding:6px 12px" onclick="closeModal()">✕</button></div><div class="modal-body"><input type="hidden" id="f_editId" value="'+(isEdit?esc(p.id):'')+'"/><div class="field-row"><div class="field"><label>เลขที่โครงการ <span class="muted">(ไม่จำเป็น)</span></label><input id="f_projectNo" value="'+esc(p.projectNo||'')+'" placeholder="เช่น มทร.สต./1/2567"/><p style="font-size:11px;color:var(--muted);margin:3px 0 0">รหัส RG-… สร้างอัตโนมัติ</p></div><div class="field"><label>ปีงบประมาณ *</label><select id="f_year">'+years.map(y=>'<option value="'+y+'"'+(Number(p.budgetYear)===y?" selected":"")+'>'+y+'</option>').join("")+'</select></div></div><div class="field"><label>ชื่อโครงการ *</label><input id="f_title" value="'+esc(p.title||'')+'"/></div><div class="field-row"><div class="field"><label>หัวหน้าโครงการ *</label><input id="f_pi" value="'+esc(p.pi||'')+'"/></div><div class="field"><label>สาขา/คณะ *</label><input id="f_dept" value="'+esc(p.dept||'')+'"/></div></div><div class="field-row3"><div class="field"><label>เบอร์โทร</label><input id="f_piPhone" value="'+esc(p.piPhone||'')+'"/></div><div class="field"><label>อีเมล</label><input id="f_piEmail" type="email" value="'+esc(p.piEmail||'')+'"/></div><div class="field"><label>วงเงินรวม (฿) *</label><input id="f_total" type="number" value="'+(p.total||'')+'"/></div></div><div class="field-row"><div class="field"><label>วันทำสัญญา *</label><input id="f_contractDate" type="date" value="'+(p.contractDate ? String(p.contractDate).substring(0, 10) : '')+'"/></div><div class="field"><label>ระยะเวลาเดิม (เดือน) *</label><input id="f_duration" type="number" value="'+baseDuration+'"/>'+(isEdit && extCount > 0 ? '<p style="font-size:11px;color:var(--amber);margin:3px 0 0">⚠️ ขยายเวลาไปแล้ว '+extCount+' ครั้ง (รวม '+extCount*3+' เดือน) ห้ามแก้ย้อนกลับ</p>':'')+'</div></div><div class="field-row"><div class="field"><label>สถานะ</label><select id="f_status">'+statuses.map(s=>'<option'+(p.status===s?" selected":"")+">"+s+'</option>').join("")+'</select></div><div class="field"><label>กำหนดส่งฉบับแก้ไข</label><input id="f_revision" type="date" value="'+(p.revisionDeadline||'')+'"/></div></div><div class="section-label">งวดการจ่ายเงิน</div><div class="field-row3"><div class="field"><label>งวดที่ 1 (฿)</label><input id="f_i1" type="number" value="'+(inst[0]?inst[0].amount:'')+'"/></div><div class="field"><label>งวดที่ 2 (฿)</label><input id="f_i2" type="number" value="'+(inst[1]?inst[1].amount:'')+'"/></div><div class="field"><label>งวดที่ 3 (฿)</label><input id="f_i3" type="number" value="'+(inst[2]?inst[2].amount:'')+'"/></div></div><div class="section-label">ผู้ประเมิน (สูงสุด 3 ท่าน)</div><div class="field-row3"><div class="field"><label>ท่านที่ 1</label><select id="f_r1">'+revOpts(revs[0]?revs[0].name:'')+'</select></div><div class="field"><label>ท่านที่ 2</label><select id="f_r2">'+revOpts(revs[1]?revs[1].name:'')+'</select></div><div class="field"><label>ท่านที่ 3</label><select id="f_r3">'+revOpts(revs[2]?revs[2].name:'')+'</select></div></div><div class="section-label">เอกสารแนบ</div><div class="field"><input type="file" id="f_file" style="font-size:12px;"/></div></div><div class="modal-footer"><div id="projErr" style="color:var(--red);font-size:12px;margin-right:auto;align-self:center"></div><button class="btn ghost" onclick="closeModal()">ยกเลิก</button><button class="btn" id="saveProjBtn" onclick="saveProject()">'+(isEdit?"บันทึกการแก้ไข":"สร้างโครงการ")+'</button></div></div>');
 }
+
 
 async function saveProject(){
   const btn=document.getElementById("saveProjBtn"),errEl=document.getElementById("projErr");if(!btn||!errEl)return;errEl.textContent="";
